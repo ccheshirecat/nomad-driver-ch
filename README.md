@@ -1,6 +1,6 @@
 # Nomad Cloud Hypervisor Driver
 
-**Production-ready Nomad task driver for Intel Cloud Hypervisor virtual machines**
+**Nomad task driver for the Cloud Hypervisor VMM**
 
 [![Build Status](https://badge.buildkite.com/your-build-badge)](https://buildkite.com/hypr/nomad-driver-ch)
 [![License](https://img.shields.io/badge/license-MPL%202.0-blue.svg)](LICENSE)
