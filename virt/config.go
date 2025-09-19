@@ -26,7 +26,7 @@ var (
 			),
 			"virtiofsd_bin": hclspec.NewDefault(
 				hclspec.NewAttr("virtiofsd_bin", "string", false),
-				hclspec.NewLiteral(`"/usr/lib/virtiofsd"`),
+				hclspec.NewLiteral(`"/usr/libexec/virtiofsd"`),
 			),
 			"default_kernel":   hclspec.NewAttr("default_kernel", "string", false),
 			"default_initramfs": hclspec.NewAttr("default_initramfs", "string", false),
@@ -60,7 +60,7 @@ var (
 			),
 			"tap_prefix": hclspec.NewDefault(
 				hclspec.NewAttr("tap_prefix", "string", false),
-				hclspec.NewLiteral(`"tap-"`),
+				hclspec.NewLiteral(`"tap"`),
 			),
 		})),
 		"vfio": hclspec.NewBlock("vfio", false, hclspec.NewObject(map[string]*hclspec.Spec{

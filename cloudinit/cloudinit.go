@@ -53,6 +53,8 @@ type VendorData struct {
 	BootCMD []string
 	Mounts  []MountFileConfig
 	Files   []File
+	// Network configuration for cloud-init
+	Network *NetworkConfig
 }
 
 type File struct {
@@ -67,6 +69,18 @@ type File struct {
 type MountFileConfig struct {
 	Destination string
 	Tag         string
+}
+
+// NetworkConfig represents cloud-init network configuration
+type NetworkConfig struct {
+	// Static IP configuration
+	Address string
+	Gateway string
+	Netmask string
+	// DNS configuration
+	Nameservers []string
+	// Interface name (optional, defaults to eth0)
+	Interface string
 }
 
 type Controller struct {

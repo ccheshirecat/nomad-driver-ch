@@ -80,6 +80,11 @@ type Config struct {
 	BOOTCMDs          []string
 	CIUserData        string
 
+	// Cloud Hypervisor specific fields
+	Kernel    string
+	Initramfs string
+	Cmdline   string
+
 	NetworkInterfaces net.NetworkInterfacesConfig
 }
 

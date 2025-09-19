@@ -5,6 +5,7 @@ package cloudhypervisor
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"net/http"
@@ -101,11 +102,11 @@ type CPUConfig struct {
 }
 
 type MemoryConfig struct {
-	Size           string `json:"size"`
+	Size           int64  `json:"size"`
 	Shared         bool   `json:"shared,omitempty"`
 	Hugepages      bool   `json:"hugepages,omitempty"`
 	HotplugMethod  string `json:"hotplug_method,omitempty"`
-	HotplugSize    string `json:"hotplug_size,omitempty"`
+	HotplugSize    int64  `json:"hotplug_size,omitempty"`
 }
 
 type PayloadConfig struct {
@@ -304,16 +305,31 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 		StartedAt: time.Now(),
 	}
 
-	// Allocate IP address
-	ip, err := d.allocateIP()
-	if err != nil {
-		return fmt.Errorf("failed to allocate IP: %w", err)
+	// Allocate IP address - use task-specific static IP if provided, otherwise allocate from pool
+	var ip string
+	if len(config.NetworkInterfaces) > 0 && config.NetworkInterfaces[0].Bridge != nil && config.NetworkInterfaces[0].Bridge.StaticIP != "" {
+		// Use task-specified static IP
+		ip = config.NetworkInterfaces[0].Bridge.StaticIP
+		d.logger.Info("using task-specified static IP", "ip", ip, "vm", config.Name)
+	} else {
+		// Allocate IP from pool
+		var err error
+		ip, err = d.allocateIP()
+		if err != nil {
+			return fmt.Errorf("failed to allocate IP: %w", err)
+		}
+		d.logger.Debug("allocated IP from pool", "ip", ip, "vm", config.Name)
 	}
 	proc.IP = ip
 
 	// Generate MAC address deterministically
 	proc.MAC = d.generateMAC(config.Name)
-	proc.TapName = d.networkConfig.TAPPrefix + config.Name
+
+	// Generate short TAP name to fit Linux's 15-char limit (IFNAMSIZ)
+	// Use prefix + hash of name + current nanosecond time for uniqueness
+	uniqueStr := fmt.Sprintf("%s-%d", config.Name, time.Now().UnixNano())
+	nameHash := fmt.Sprintf("%x", sha256.Sum256([]byte(uniqueStr)))[:8]
+	proc.TapName = d.networkConfig.TAPPrefix + nameHash
 
 	// Create cloud-init ISO
 	if err := d.createCloudInit(config, proc, workDir); err != nil {

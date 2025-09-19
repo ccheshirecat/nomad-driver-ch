@@ -639,6 +639,10 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		SSHKey:            driverConfig.DefaultUserSSHKey,
 		Files:             []domain.File{createEnvsFile(cfg.Env)},
 		NetworkInterfaces: driverConfig.NetworkInterfacesConfig,
+		// Cloud Hypervisor specific fields from task config
+		Kernel:            driverConfig.Kernel,
+		Initramfs:         driverConfig.Initramfs,
+		Cmdline:           driverConfig.Cmdline,
 	}
 
 	if err := dc.Validate(allowedPaths); err != nil {

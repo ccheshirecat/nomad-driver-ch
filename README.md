@@ -400,6 +400,7 @@ job "ml-workload" {
     task "training" {
       driver = "nomad-driver-ch"
 
+
       config {
         image = "/var/lib/images/cuda-ubuntu.img"
         hostname = "ml-trainer"

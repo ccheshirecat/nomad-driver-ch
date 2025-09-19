@@ -81,18 +81,21 @@ func TestConfig_Plugin(t *testing.T) {
 
 	expectedDataDir := "/path/to/blah"
 	expectedImgPaths := []string{"/path/one", "/path/two"}
-	expectedURI := "qume:///user"
-	expectedUser := "test-user"
-	expectedPassword := "test-password"
+	expectedCHBin := "/usr/bin/cloud-hypervisor"
+	expectedBridge := "br0"
+	expectedKernel := "/root/vmlinux-normal"
 
 	validHCL := `
   config {
 	data_dir = "/path/to/blah"
 	image_paths = ["/path/one", "/path/two"]
-	emulator {
-		uri = "qume:///user"
-		user = "test-user"
-		password = "test-password"
+	cloud_hypervisor {
+		bin = "/usr/bin/cloud-hypervisor"
+		default_kernel = "/root/vmlinux-normal"
+	}
+	network {
+		bridge = "br0"
+		subnet_cidr = "194.31.143.0/24"
 	}
   }
 `
@@ -102,9 +105,9 @@ func TestConfig_Plugin(t *testing.T) {
 
 	must.SliceContainsAll(t, expectedImgPaths, cs.ImagePaths)
 	must.StrContains(t, expectedDataDir, cs.DataDir)
-	must.StrContains(t, expectedURI, cs.Emulator.URI)
-	must.StrContains(t, expectedUser, cs.Emulator.User)
-	must.StrContains(t, expectedPassword, cs.Emulator.Password)
+	must.StrContains(t, expectedCHBin, cs.CloudHypervisor.Bin)
+	must.StrContains(t, expectedBridge, cs.Network.Bridge)
+	must.StrContains(t, expectedKernel, cs.CloudHypervisor.DefaultKernel)
 }
 
 func Test_taskConfigSpec(t *testing.T) {
@@ -145,7 +148,12 @@ config {
 							Ports: []string{"ssh"},
 						},
 					},
-				}},
+				},
+				// Initialize Cloud Hypervisor fields as empty slices
+				Disks:    []DiskConfig{},
+				FSMounts: []FSMountConfig{},
+				Devices:  []DeviceConfig{},
+			},
 		},
 	}
 

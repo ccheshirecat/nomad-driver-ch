@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ccheshirecat/nomad-driver-ch/cloudinit"
@@ -36,20 +37,73 @@ func (d *Driver) createCloudInit(config *domain.Config, proc *VMProcess, workDir
 	// Add any additional boot commands from config
 	bootCMDs = append(bootCMDs, config.BOOTCMDs...)
 
-	// Create network configuration for static IP
-	networkConfig := fmt.Sprintf(`
-network:
-  version: 2
-  ethernets:
-    eth0:
-      addresses:
-        - %s/24
-      gateway4: %s
-      nameservers:
-        addresses:
-          - 8.8.8.8
-          - 1.1.1.1
-`, proc.IP, d.networkConfig.Gateway)
+	// Configure network settings dynamically based on VM and task configuration
+	var networkConfig *cloudinit.NetworkConfig
+	if proc.IP != "" || len(config.NetworkInterfaces) > 0 {
+		// Start with defaults
+		netmask := "24" // Default /24 subnet
+		gateway := d.networkConfig.Gateway
+		ipAddress := proc.IP
+		interfaceName := "eth0" // Default interface
+		nameservers := []string{"8.8.8.8", "8.8.4.4"} // Default DNS servers
+
+		// Override with driver network config if available
+		if d.networkConfig.SubnetCIDR != "" {
+			// Extract netmask from CIDR (e.g., "194.31.143.0/24" -> "24")
+			if parts := strings.Split(d.networkConfig.SubnetCIDR, "/"); len(parts) == 2 {
+				netmask = parts[1]
+			}
+		}
+		if gateway == "" {
+			gateway = "194.31.143.1" // Fallback gateway for 194.31.143.0/24 network
+		}
+
+		// Override with task-specific network configuration if provided
+		if len(config.NetworkInterfaces) > 0 && config.NetworkInterfaces[0].Bridge != nil {
+			bridgeConfig := config.NetworkInterfaces[0].Bridge
+
+			// Use static IP from task config if specified
+			if bridgeConfig.StaticIP != "" {
+				ipAddress = bridgeConfig.StaticIP
+			}
+
+			// Use task-specific gateway if specified
+			if bridgeConfig.Gateway != "" {
+				gateway = bridgeConfig.Gateway
+			}
+
+			// Use task-specific netmask if specified
+			if bridgeConfig.Netmask != "" {
+				netmask = bridgeConfig.Netmask
+			}
+
+			// Use task-specific DNS if specified
+			if len(bridgeConfig.DNS) > 0 {
+				nameservers = bridgeConfig.DNS
+			}
+
+			// For bridge network, keep eth0 as the interface name inside the VM
+			interfaceName = "eth0"
+		}
+
+		// Create network config for cloud-init (supports both static and DHCP)
+		networkConfig = &cloudinit.NetworkConfig{
+			Address:     ipAddress, // Empty string enables DHCP
+			Gateway:     gateway,
+			Netmask:     netmask,
+			Interface:   interfaceName,
+			Nameservers: nameservers,
+		}
+
+		d.logger.Debug("configured cloud-init network",
+			"ip", ipAddress,
+			"gateway", gateway,
+			"netmask", netmask,
+			"interface", interfaceName,
+			"dns", nameservers,
+			"dhcp_fallback", ipAddress == "",
+			"source", "task_config+driver_config")
+	}
 
 	// Build cloud-init config
 	ciConfig := &cloudinit.Config{
@@ -58,18 +112,14 @@ network:
 			LocalHostname: config.HostName,
 		},
 		VendorData: cloudinit.VendorData{
-			Password:  config.Password,
-			SSHKey:    config.SSHKey,
-			BootCMD:   bootCMDs,
-			RunCMD:    config.CMDs,
-			Files:     convertFiles(config.Files),
+			Password: config.Password,
+			SSHKey:   config.SSHKey,
+			BootCMD:  bootCMDs,
+			RunCMD:   config.CMDs,
+			Files:    convertFiles(config.Files),
+			Network:  networkConfig,
 		},
 		UserData: config.CIUserData,
-	}
-
-	// If no custom user data, add network config
-	if config.CIUserData == "" {
-		ciConfig.UserData = fmt.Sprintf("#cloud-config\n%s", networkConfig)
 	}
 
 	// Create ISO
@@ -102,20 +152,20 @@ func convertFiles(domainFiles []domain.File) []cloudinit.File {
 func (d *Driver) setupNetworking(proc *VMProcess) error {
 	// Create TAP interface
 	cmd := exec.Command("ip", "tuntap", "add", "dev", proc.TapName, "mode", "tap")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create tap interface: %w", err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create tap interface %s: %w (output: %s)", proc.TapName, err, string(output))
 	}
 
 	// Set TAP interface up
 	cmd = exec.Command("ip", "link", "set", "dev", proc.TapName, "up")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to bring up tap interface: %w", err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to bring up tap interface %s: %w (output: %s)", proc.TapName, err, string(output))
 	}
 
 	// Add TAP to bridge
 	cmd = exec.Command("ip", "link", "set", "dev", proc.TapName, "master", d.networkConfig.Bridge)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to add tap to bridge: %w", err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to add tap %s to bridge %s: %w (output: %s)", proc.TapName, d.networkConfig.Bridge, err, string(output))
 	}
 
 	d.logger.Debug("networking setup complete",
@@ -194,29 +244,36 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 			MaxVCPUs:  config.CPUs, // TODO: support max_vcpus from task config
 		},
 		Memory: MemoryConfig{
-			Size:   fmt.Sprintf("%dM", config.Memory),
+			Size:   int64(config.Memory) * 1024 * 1024, // Convert MB to bytes
 			Shared: true, // Required for virtio-fs
 		},
-		Console: ConsoleConfig{Mode: "null"}, // Disable console
-		Serial:  SerialConfig{Mode: "file", File: filepath.Join(proc.WorkDir, "serial.log")},
+		Console: ConsoleConfig{Mode: "Null"}, // Disable console
+		Serial:  SerialConfig{Mode: "File", File: filepath.Join(proc.WorkDir, "serial.log")},
 	}
 
 	// Set kernel/initramfs/cmdline
 	if config.BaseImage != "" {
-		// Check if we have kernel specified
-		kernel := d.config.DefaultKernel
-		initramfs := d.config.DefaultInitramfs
-		cmdline := "console=hvc0 root=/dev/vda1 rw"
+		// Use task config values if provided, otherwise fallback to defaults
+		kernel := config.Kernel
+		if kernel == "" {
+			kernel = d.config.DefaultKernel
+		}
 
-		// TODO: Extract kernel/initramfs/cmdline from task config when available
+		initramfs := config.Initramfs
+		if initramfs == "" {
+			initramfs = d.config.DefaultInitramfs
+		}
 
-		if kernel != "" {
+		cmdline := config.Cmdline
+		if cmdline == "" {
+			cmdline = "console=hvc0 root=/dev/vda1 rw"
+		}
+
+		if kernel != "" && initramfs != "" {
 			vmConfig.Payload = &PayloadConfig{
-				Kernel:   kernel,
-				Cmdline:  cmdline,
-			}
-			if initramfs != "" {
-				vmConfig.Payload.Initramfs = initramfs
+				Kernel:    kernel,
+				Cmdline:   cmdline,
+				Initramfs: initramfs, // Always required for Cloud Hypervisor
 			}
 		}
 	}
@@ -229,20 +286,40 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 		},
 	}
 
-	// Add cloud-init ISO as readonly disk
+	// Add cloud-init ISO as readonly disk with serial for cloud-init recognition
 	isoPath := filepath.Join(proc.WorkDir, config.Name+".iso")
 	vmConfig.Disks = append(vmConfig.Disks, DiskConfig{
 		Path:     isoPath,
 		Readonly: true,
+		Serial:   "cloud-init", // Help cloud-init identify the config source
 	})
 
-	// Add network interface
-	vmConfig.Net = []NetConfig{
-		{
-			Tap: proc.TapName,
-			MAC: proc.MAC,
-		},
+	// Add network interface with optional static IP
+	netConfig := NetConfig{
+		Tap: proc.TapName,
+		MAC: proc.MAC,
 	}
+
+	// Add static IP configuration if available (cloud-init will handle final network setup)
+	if proc.IP != "" {
+		netConfig.IP = proc.IP
+
+		// Calculate subnet mask from CIDR
+		if d.networkConfig.SubnetCIDR != "" {
+			if parts := strings.Split(d.networkConfig.SubnetCIDR, "/"); len(parts) == 2 {
+				// Convert CIDR notation to dotted decimal mask (e.g., /24 -> 255.255.255.0)
+				if parts[1] == "24" {
+					netConfig.Mask = "255.255.255.0"
+				} else if parts[1] == "16" {
+					netConfig.Mask = "255.255.0.0"
+				} else if parts[1] == "8" {
+					netConfig.Mask = "255.0.0.0"
+				}
+			}
+		}
+	}
+
+	vmConfig.Net = []NetConfig{netConfig}
 
 	// Add RNG
 	vmConfig.RNG = &RNGConfig{

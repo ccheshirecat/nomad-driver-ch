@@ -232,18 +232,18 @@ func TestExecuteTemplate(t *testing.T) {
 password: test-password
 users:
   - ssh-authorized-keys: test-sshkey
-mounts:  
+mounts:
   - [ tag, /destination, "ext4", "defaults", "0", "2" ]
-write_files:  
+write_files:
   - path: /here
     content: test content
     permissions: '0707'
     owner: root:root
-runcmd:  
-  - cmd1 arg arg  
+runcmd:
+  - cmd1 arg arg
   - cmd2 arg arg
-bootcmd:  
-  - bootcmd1 arg arg  
+bootcmd:
+  - bootcmd1 arg arg
   - bootcmd2 arg arg
 `,
 		},
@@ -282,18 +282,18 @@ merge_how:
 password: test-password
 users:
   - ssh-authorized-keys: test-sshkey
-mounts:  
+mounts:
   - [ tag, /destination, "ext4", "defaults", "0", "2" ]
-write_files:  
+write_files:
   - path: /here
     content: "test content"
     permissions: '0707'
     owner: root:root
-runcmd:  
-  - cmd1 arg arg  
+runcmd:
+  - cmd1 arg arg
   - cmd2 arg arg
-bootcmd:  
-  - bootcmd1 arg arg  
+bootcmd:
+  - bootcmd1 arg arg
   - bootcmd2 arg arg
 `,
 		},
@@ -318,7 +318,13 @@ bootcmd:
 				must.Error(t, err)
 			} else {
 				must.NoError(t, err)
-				must.StrContains(t, tt.expectedContent, out.String())
+				actualOutput := out.String()
+				if actualOutput != tt.expectedContent {
+					t.Logf("Expected:\n%q\n", tt.expectedContent)
+					t.Logf("Actual:\n%q\n", actualOutput)
+					t.Logf("Expected length: %d, Actual length: %d", len(tt.expectedContent), len(actualOutput))
+				}
+				must.Eq(t, tt.expectedContent, actualOutput)
 			}
 		})
 	}

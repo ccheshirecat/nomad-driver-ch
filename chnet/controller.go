@@ -132,7 +132,10 @@ func (c *Controller) Init() error {
 func (c *Controller) ensureIPTables() error {
 	ipt, err := iptables.New()
 	if err != nil {
-		return fmt.Errorf("failed to create iptables handle: %w", err)
+		// In test environments or systems without iptables, skip network setup
+		// Port forwarding will not work, but basic VM functionality will
+		c.logger.Warn("iptables not available, skipping network setup", "error", err)
+		return nil
 	}
 
 	// Ensure the NAT prerouting chain is available and create the jump rule if

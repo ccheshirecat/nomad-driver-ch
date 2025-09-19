@@ -1,31 +1,9 @@
 steps:
-  - label: "🏗️ Setup Dependencies"
-    command: |
-      set -euxo pipefail
-      echo "--- Download and install Go"
-      if ! command -v go &> /dev/null; then
-        wget -O go.tar.gz https://go.dev/dl/go1.24.7.linux-amd64.tar.gz
-        sudo rm -rf /usr/local/go
-        sudo tar -C /usr/local -xzf go.tar.gz
-        rm go.tar.gz
-      fi
-      export PATH="/usr/local/go/bin:$PATH"
-      go version
-
-      echo "--- Download Cloud Hypervisor binary"
-      if ! command -v cloud-hypervisor &> /dev/null; then
-        wget --max-redirect=20 --timeout=30 --tries=3 \
-             -O cloud-hypervisor \
-             https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v48.0/cloud-hypervisor
-        chmod +x cloud-hypervisor
-        sudo mv cloud-hypervisor /usr/local/bin/
-      fi
-      cloud-hypervisor --version
-
   - label: "🏗️ Build & Unit Tests"
     command: |
       set -euxo pipefail
-      export PATH="/usr/local/go/bin:$PATH"
+      export PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
+
       echo "--- Go environment"
       go version
       go env
@@ -35,6 +13,7 @@ steps:
       go vet ./...
 
       echo "--- Unit tests"
+      export CGO_ENABLED=1
       go test -count=1 -race ./...
 
       echo "--- Build binary"
@@ -43,7 +22,7 @@ steps:
   - label: "🔬 Cloud Hypervisor Integration Test"
     command: |
       set -euxo pipefail
-      export PATH="/usr/local/go/bin:$PATH"
+      export PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
 
       echo "--- Verify Cloud Hypervisor binary"
       cloud-hypervisor --version
@@ -58,7 +37,8 @@ steps:
 
       echo "--- Integration tests"
       sudo -E env \
-        PATH="$PATH" \
+        PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH" \
+        CGO_ENABLED=1 \
         KERNEL_PATH="${KERNEL_PATH:-/root/vmlinux-normal}" \
         INITRD_PATH="${INITRD_PATH:-/root/raiin-fc.cpio.gz}" \
         ROOTFS_PATH="${ROOTFS_PATH:-/root/rootfs.img}" \
