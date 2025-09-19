@@ -210,13 +210,11 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 
 		// TODO: Extract kernel/initramfs/cmdline from task config when available
 
-		if kernel != "" {
+		if kernel != "" && initramfs != "" {
 			vmConfig.Payload = &PayloadConfig{
-				Kernel:   kernel,
-				Cmdline:  cmdline,
-			}
-			if initramfs != "" {
-				vmConfig.Payload.Initramfs = initramfs
+				Kernel:    kernel,
+				Cmdline:   cmdline,
+				Initramfs: initramfs, // Always required for Cloud Hypervisor
 			}
 		}
 	}

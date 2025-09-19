@@ -220,8 +220,8 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 			Bin:              "/usr/bin/cloud-hypervisor",
 			RemoteBin:        "/usr/bin/ch-remote",
 			VirtiofsdBin:     "/usr/libexec/virtiofsd",
-			DefaultKernel:    "/root/vmlinux-normal",
-			DefaultInitramfs: "/root/raiin-fc.cpio.gz",
+			DefaultKernel:    "/root/vmlinuz-virt",
+			DefaultInitramfs: "/root/initramfs-virt",
 			Firmware:         "",
 			Seccomp:          "true",
 			LogFile:          "",
@@ -283,12 +283,18 @@ func TestVirtDriver_Start_Wait_Destroy(t *testing.T) {
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	mockImage, err := os.CreateTemp(tempDir, "test-*.img")
-	must.NoError(t, err)
-	defer os.Remove(mockImage.Name())
+	// Use actual rootfs image available in CI environment
+	rootfsPath := "/root/alpine-rootfs.img"
+	// Fallback to temp file if not in CI
+	if _, err := os.Stat(rootfsPath); err != nil {
+		mockImage, err := os.CreateTemp(tempDir, "test-*.img")
+		must.NoError(t, err)
+		defer os.Remove(mockImage.Name())
+		rootfsPath = mockImage.Name()
+	}
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(t, mockImage.Name())
+	taskCfg := newTaskConfig(t, rootfsPath)
 
 	taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
 	task := &drivers.TaskConfig{
@@ -411,12 +417,18 @@ func TestVirtDriver_Start_Recover_Destroy(t *testing.T) {
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	mockImage, err := os.CreateTemp(tempDir, "test-*.img")
-	must.NoError(t, err)
-	defer os.Remove(mockImage.Name())
+	// Use actual rootfs image available in CI environment
+	rootfsPath := "/root/alpine-rootfs.img"
+	// Fallback to temp file if not in CI
+	if _, err := os.Stat(rootfsPath); err != nil {
+		mockImage, err := os.CreateTemp(tempDir, "test-*.img")
+		must.NoError(t, err)
+		defer os.Remove(mockImage.Name())
+		rootfsPath = mockImage.Name()
+	}
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(t, mockImage.Name())
+	taskCfg := newTaskConfig(t, rootfsPath)
 
 	taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
 	task := &drivers.TaskConfig{
@@ -474,12 +486,18 @@ func TestVirtDriver_Start_Wait_Crashed(t *testing.T) {
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	mockImage, err := os.CreateTemp(tempDir, "test-*.img")
-	must.NoError(t, err)
-	defer os.Remove(mockImage.Name())
+	// Use actual rootfs image available in CI environment
+	rootfsPath := "/root/alpine-rootfs.img"
+	// Fallback to temp file if not in CI
+	if _, err := os.Stat(rootfsPath); err != nil {
+		mockImage, err := os.CreateTemp(tempDir, "test-*.img")
+		must.NoError(t, err)
+		defer os.Remove(mockImage.Name())
+		rootfsPath = mockImage.Name()
+	}
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(t, mockImage.Name())
+	taskCfg := newTaskConfig(t, rootfsPath)
 
 	taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
 	task := &drivers.TaskConfig{
@@ -625,12 +643,18 @@ func TestVirtDriver_Start_Wait_Destroy_LibvirtIntegration(t *testing.T) {
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	mockImage, err := os.CreateTemp(tempDir, "test-*.img")
-	must.NoError(t, err)
-	defer os.Remove(mockImage.Name())
+	// Use actual rootfs image available in CI environment
+	rootfsPath := "/root/alpine-rootfs.img"
+	// Fallback to temp file if not in CI
+	if _, err := os.Stat(rootfsPath); err != nil {
+		mockImage, err := os.CreateTemp(tempDir, "test-*.img")
+		must.NoError(t, err)
+		defer os.Remove(mockImage.Name())
+		rootfsPath = mockImage.Name()
+	}
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(t, mockImage.Name())
+	taskCfg := newTaskConfig(t, rootfsPath)
 	taskCfg.UserData = ""
 	taskCfg.OS = &OS{
 		Arch:    "x86_64",
