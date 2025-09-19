@@ -15,7 +15,7 @@ The `nomad-driver-ch` is a task driver for [HashiCorp Nomad](https://www.nomadpr
 - **🌐 Advanced Networking**: Bridge networking with static IP support and dynamic configuration
 - **☁️ Cloud-Init Integration**: Automatic VM provisioning with user data, SSH keys, and custom scripts
 - **💾 Flexible Storage**: Virtio-fs shared filesystems and disk image management with thin provisioning
-- **🎯 PCIe Device Passthrough**: VFIO support for GPU and specialized hardware access
+- **🚧 PCIe Device Passthrough**: VFIO support coming very soon - high priority feature in active development
 - **🔒 Security Isolation**: Secure VM boundaries with configurable seccomp filtering
 - **📊 Resource Monitoring**: Real-time VM statistics and health monitoring
 - **🔄 Lifecycle Management**: Complete VM lifecycle with start, stop, restart, and recovery capabilities
@@ -223,12 +223,12 @@ plugin "nomad-driver-ch" {
       tap_prefix = "tap"                  # TAP interface prefix
     }
 
-    # VFIO device passthrough
-    vfio {
-      allowlist = ["10de:*", "8086:0d26"]  # PCI device allowlist
-      iommu_address_width = 48              # IOMMU address width
-      pci_segments = 1                      # Number of PCI segments
-    }
+    # VFIO device passthrough (not yet implemented)
+    # vfio {
+    #   allowlist = ["10de:*", "8086:0d26"]  # PCI device allowlist
+    #   iommu_address_width = 48              # IOMMU address width
+    #   pci_segments = 1                      # Number of PCI segments
+    # }
 
     # Security and paths
     data_dir = "/opt/nomad/data"              # Nomad data directory
@@ -259,9 +259,9 @@ plugin "nomad-driver-ch" {
 | `network.ip_pool_start` | string | `"192.168.1.100"` | IP allocation pool start |
 | `network.ip_pool_end` | string | `"192.168.1.200"` | IP allocation pool end |
 | `network.tap_prefix` | string | `"tap"` | TAP interface name prefix |
-| `vfio.allowlist` | []string | - | Allowed PCI device IDs for passthrough |
-| `vfio.iommu_address_width` | number | - | IOMMU address width |
-| `vfio.pci_segments` | number | - | Number of PCI segments |
+| `vfio.allowlist` | []string | - | ⚠️ Not implemented yet |
+| `vfio.iommu_address_width` | number | - | ⚠️ Not implemented yet |
+| `vfio.pci_segments` | number | - | ⚠️ Not implemented yet |
 | `data_dir` | string | - | Nomad data directory |
 | `image_paths` | []string | - | Allowed VM image paths |
 
@@ -404,8 +404,8 @@ job "ml-workload" {
         image = "/var/lib/images/cuda-ubuntu.img"
         hostname = "ml-trainer"
 
-        # VFIO GPU passthrough
-        vfio_devices = ["10de:2204"]  # NVIDIA RTX 3080
+        # VFIO GPU passthrough (not yet implemented)
+        # vfio_devices = ["10de:2204"]  # NVIDIA RTX 3080
       }
 
       resources {
@@ -637,24 +637,27 @@ job "shared-storage" {
 }
 ```
 
-## 🎯 Device Passthrough
+## 🚧 Device Passthrough (Coming Very Soon!)
 
 ### VFIO Configuration
 
-Enable VFIO in driver configuration:
+⚠️ **VFIO passthrough is a high-priority feature in active development and will be available very soon.** This is one of Cloud Hypervisor's most valuable capabilities and is being prioritized for the next release.
+
+The configuration would look like this when implemented:
 
 ```hcl
-config {
-  vfio {
-    allowlist = [
-      "10de:*",      # All NVIDIA devices
-      "8086:0d26",   # Intel specific device
-      "1002:67df"    # AMD Radeon RX 480
-    ]
-    iommu_address_width = 48
-    pci_segments = 1
-  }
-}
+# This feature is not yet available
+# config {
+#   vfio {
+#     allowlist = [
+#       "10de:*",      # All NVIDIA devices
+#       "8086:0d26",   # Intel specific device
+#       "1002:67df"    # AMD Radeon RX 480
+#     ]
+#     iommu_address_width = 48
+#     pci_segments = 1
+#   }
+# }
 ```
 
 ### GPU Passthrough Example
@@ -675,8 +678,8 @@ job "ai-training" {
       config {
         image = "/var/lib/images/cuda-pytorch.img"
 
-        # Pass through NVIDIA RTX 3080
-        vfio_devices = ["10de:2204", "10de:1aef"]  # GPU + Audio controller
+        # Pass through NVIDIA RTX 3080 (not yet implemented)
+        # vfio_devices = ["10de:2204", "10de:1aef"]  # GPU + Audio controller
       }
 
       resources {
@@ -872,8 +875,8 @@ config {
     }
   }
 
-  # Optional: VFIO device passthrough
-  vfio_devices = ["10de:2204"]  # PCI device IDs
+  # Optional: VFIO device passthrough (coming very soon!)
+  # vfio_devices = ["10de:2204"]  # PCI device IDs
 
   # Optional: USB device passthrough
   usb_devices = ["046d:c52b"]   # USB vendor:product IDs
