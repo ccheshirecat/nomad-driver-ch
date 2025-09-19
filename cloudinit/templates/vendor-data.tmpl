@@ -13,15 +13,13 @@ password: {{.VendorData.Password}}
 
 {{- if .VendorData.SSHKey }}
 users:
-  {{- if .VendorData.SSHKey }}
-  - ssh-authorized-keys: {{.VendorData.SSHKey }}
-  {{- end }}
+  - ssh-authorized-keys: {{.VendorData.SSHKey}}
 {{- end}}
 
 
 {{- $length_mounts := len .VendorData.Mounts }} {{- if ne $length_mounts 0 }}
 mounts:
-  {{- range .VendorData.Mounts}}  
+  {{- range .VendorData.Mounts}}
   - [ {{.Tag}}, {{.Destination}}, "ext4", "defaults", "0", "2" ]
   {{- end }}
 {{- end }}
@@ -29,9 +27,9 @@ mounts:
 
 {{- $lenght_files := len .VendorData.Files }}{{- if ne $lenght_files 0}}
 write_files:
-  {{- range .VendorData.Files}}  
+  {{- range .VendorData.Files}}
   - path: {{.Path}}
-    {{- if .Encoding}} 
+    {{- if .Encoding}}
     encoding: {{.Encoding}}
     {{- end}}
     content: {{.Content}}
@@ -42,7 +40,7 @@ write_files:
 
 {{- $length_cmd := len .VendorData.RunCMD }} {{- if or (ne $length_cmd 0) }}
 runcmd:
-  {{- range .VendorData.RunCMD}}  
+  {{- range .VendorData.RunCMD}}
   - {{.}}
   {{- end }}
 {{- end }}
