@@ -249,6 +249,29 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 	return harness
 }
 
+// createUniqueRootfsImage creates a unique disk image file for each test to avoid locking conflicts
+func createUniqueRootfsImage(t *testing.T, tempDir string) string {
+	// Try to use actual rootfs image if available
+	sourceImage := "/root/alpine-rootfs.img"
+
+	// Create unique image file for this test
+	uniqueImage, err := os.CreateTemp(tempDir, "test-rootfs-*.img")
+	must.NoError(t, err)
+	defer uniqueImage.Close()
+
+	// If source image exists, copy it; otherwise create a minimal file
+	if sourceData, err := os.ReadFile(sourceImage); err == nil {
+		_, err = uniqueImage.Write(sourceData)
+		must.NoError(t, err)
+	} else {
+		// Create minimal test file if source not available
+		_, err = uniqueImage.WriteString("test image content")
+		must.NoError(t, err)
+	}
+
+	return uniqueImage.Name()
+}
+
 func newTaskConfig(t *testing.T, image string) TaskConfig {
 	// Create temporary user data file
 	tmpFile, err := os.CreateTemp("", "userdata-*.txt")
@@ -284,15 +307,8 @@ func TestVirtDriver_Start_Wait_Destroy(t *testing.T) {
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Use actual rootfs image available in CI environment
-	rootfsPath := "/root/alpine-rootfs.img"
-	// Fallback to temp file if not in CI
-	if _, err := os.Stat(rootfsPath); err != nil {
-		mockImage, err := os.CreateTemp(tempDir, "test-*.img")
-		must.NoError(t, err)
-		defer os.Remove(mockImage.Name())
-		rootfsPath = mockImage.Name()
-	}
+	// Create unique disk image for this test to avoid locking conflicts
+	uniqueRootfsPath := createUniqueRootfsImage(t, tempDir)
 
 	allocID := uuid.Generate()
 	taskCfg := newTaskConfig(t, rootfsPath)
@@ -335,7 +351,7 @@ func TestVirtDriver_Start_Wait_Destroy(t *testing.T) {
 	must.Eq(t, 3, callConfig.CPUs)
 	must.StrContains(t, "arch", callConfig.OsVariant.Arch)
 	must.StrContains(t, "machine", callConfig.OsVariant.Machine)
-	must.StrContains(t, rootfsPath, callConfig.BaseImage)
+	must.StrContains(t, uniqueRootfsPath, callConfig.BaseImage)
 	must.StrContains(t, "tif", callConfig.DiskFmt)
 	must.Eq(t, 2666, callConfig.PrimaryDiskSize)
 	must.StrContains(t, "nomad-task-name-0000000", callConfig.HostName)
@@ -418,18 +434,11 @@ func TestVirtDriver_Start_Recover_Destroy(t *testing.T) {
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Use actual rootfs image available in CI environment
-	rootfsPath := "/root/alpine-rootfs.img"
-	// Fallback to temp file if not in CI
-	if _, err := os.Stat(rootfsPath); err != nil {
-		mockImage, err := os.CreateTemp(tempDir, "test-*.img")
-		must.NoError(t, err)
-		defer os.Remove(mockImage.Name())
-		rootfsPath = mockImage.Name()
-	}
+	// Create unique disk image for this test to avoid locking conflicts
+	uniqueRootfsPath := createUniqueRootfsImage(t, tempDir)
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(t, rootfsPath)
+	taskCfg := newTaskConfig(t, uniqueRootfsPath)
 
 	taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
 	task := &drivers.TaskConfig{
@@ -482,23 +491,17 @@ func TestVirtDriver_Start_Recover_Destroy(t *testing.T) {
 }
 
 func TestVirtDriver_Start_Wait_Crashed(t *testing.T) {
+	ci.Parallel(t)
 
 	tempDir, err := os.MkdirTemp("", "exampledir-*")
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Use actual rootfs image available in CI environment
-	rootfsPath := "/root/alpine-rootfs.img"
-	// Fallback to temp file if not in CI
-	if _, err := os.Stat(rootfsPath); err != nil {
-		mockImage, err := os.CreateTemp(tempDir, "test-*.img")
-		must.NoError(t, err)
-		defer os.Remove(mockImage.Name())
-		rootfsPath = mockImage.Name()
-	}
+	// Create unique disk image for this test to avoid locking conflicts
+	uniqueRootfsPath := createUniqueRootfsImage(t, tempDir)
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(t, rootfsPath)
+	taskCfg := newTaskConfig(t, uniqueRootfsPath)
 
 	taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
 	task := &drivers.TaskConfig{
@@ -644,18 +647,11 @@ func TestVirtDriver_Start_Wait_Destroy_LibvirtIntegration(t *testing.T) {
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Use actual rootfs image available in CI environment
-	rootfsPath := "/root/alpine-rootfs.img"
-	// Fallback to temp file if not in CI
-	if _, err := os.Stat(rootfsPath); err != nil {
-		mockImage, err := os.CreateTemp(tempDir, "test-*.img")
-		must.NoError(t, err)
-		defer os.Remove(mockImage.Name())
-		rootfsPath = mockImage.Name()
-	}
+	// Create unique disk image for this test to avoid locking conflicts
+	uniqueRootfsPath := createUniqueRootfsImage(t, tempDir)
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(t, rootfsPath)
+	taskCfg := newTaskConfig(t, uniqueRootfsPath)
 	taskCfg.UserData = ""
 	taskCfg.OS = &OS{
 		Arch:    "x86_64",
