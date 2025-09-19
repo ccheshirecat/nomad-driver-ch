@@ -102,11 +102,11 @@ type CPUConfig struct {
 }
 
 type MemoryConfig struct {
-	Size           string `json:"size"`
+	Size           int64  `json:"size"`
 	Shared         bool   `json:"shared,omitempty"`
 	Hugepages      bool   `json:"hugepages,omitempty"`
 	HotplugMethod  string `json:"hotplug_method,omitempty"`
-	HotplugSize    string `json:"hotplug_size,omitempty"`
+	HotplugSize    int64  `json:"hotplug_size,omitempty"`
 }
 
 type PayloadConfig struct {

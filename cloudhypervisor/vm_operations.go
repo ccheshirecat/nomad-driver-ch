@@ -194,7 +194,7 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 			MaxVCPUs:  config.CPUs, // TODO: support max_vcpus from task config
 		},
 		Memory: MemoryConfig{
-			Size:   fmt.Sprintf("%d", config.Memory*1024*1024), // Convert MB to bytes
+			Size:   int64(config.Memory) * 1024 * 1024, // Convert MB to bytes
 			Shared: true, // Required for virtio-fs
 		},
 		Console: ConsoleConfig{Mode: "null"}, // Disable console
