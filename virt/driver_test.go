@@ -311,7 +311,7 @@ func TestVirtDriver_Start_Wait_Destroy(t *testing.T) {
 	uniqueRootfsPath := createUniqueRootfsImage(t, tempDir)
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(t, rootfsPath)
+	taskCfg := newTaskConfig(t, uniqueRootfsPath)
 
 	taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
 	task := &drivers.TaskConfig{
