@@ -208,6 +208,24 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 	baseConfig := &base.Config{}
 	config := &Config{
 		DataDir: dataDir,
+		Network: domain.Network{
+			Bridge:      "br0",
+			SubnetCIDR:  "192.168.1.0/24",
+			Gateway:     "192.168.1.1",
+			IPPoolStart: "192.168.1.100",
+			IPPoolEnd:   "192.168.1.200",
+			TAPPrefix:   "tap",
+		},
+		CloudHypervisor: domain.CloudHypervisor{
+			Bin:              "/usr/bin/cloud-hypervisor",
+			RemoteBin:        "/usr/bin/ch-remote",
+			VirtiofsdBin:     "/usr/lib/virtiofsd",
+			DefaultKernel:    "",
+			DefaultInitramfs: "",
+			Firmware:         "",
+			Seccomp:          "true",
+			LogFile:          "",
+		},
 	}
 
 	if err := base.MsgPackEncode(&baseConfig.PluginConfig, config); err != nil {
