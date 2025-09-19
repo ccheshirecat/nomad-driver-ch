@@ -26,7 +26,7 @@ var (
 			),
 			"virtiofsd_bin": hclspec.NewDefault(
 				hclspec.NewAttr("virtiofsd_bin", "string", false),
-				hclspec.NewLiteral(`"/usr/lib/virtiofsd"`),
+				hclspec.NewLiteral(`"/usr/libexec/virtiofsd"`),
 			),
 			"default_kernel":   hclspec.NewAttr("default_kernel", "string", false),
 			"default_initramfs": hclspec.NewAttr("default_initramfs", "string", false),

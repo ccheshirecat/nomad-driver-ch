@@ -219,7 +219,7 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 		CloudHypervisor: domain.CloudHypervisor{
 			Bin:              "/usr/bin/cloud-hypervisor",
 			RemoteBin:        "/usr/bin/ch-remote",
-			VirtiofsdBin:     "/usr/lib/virtiofsd",
+			VirtiofsdBin:     "/usr/libexec/virtiofsd",
 			DefaultKernel:    "",
 			DefaultInitramfs: "",
 			Firmware:         "",
