@@ -102,8 +102,8 @@ func convertFiles(domainFiles []domain.File) []cloudinit.File {
 func (d *Driver) setupNetworking(proc *VMProcess) error {
 	// Create TAP interface
 	cmd := exec.Command("ip", "tuntap", "add", "dev", proc.TapName, "mode", "tap")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create tap interface: %w", err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create tap interface %s: %w (output: %s)", proc.TapName, err, string(output))
 	}
 
 	// Set TAP interface up
