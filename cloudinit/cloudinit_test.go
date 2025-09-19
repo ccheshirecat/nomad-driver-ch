@@ -318,7 +318,13 @@ bootcmd:
 				must.Error(t, err)
 			} else {
 				must.NoError(t, err)
-				must.StrContains(t, tt.expectedContent, out.String())
+				actualOutput := out.String()
+				if actualOutput != tt.expectedContent {
+					t.Logf("Expected:\n%q\n", tt.expectedContent)
+					t.Logf("Actual:\n%q\n", actualOutput)
+					t.Logf("Expected length: %d, Actual length: %d", len(tt.expectedContent), len(actualOutput))
+				}
+				must.Eq(t, tt.expectedContent, actualOutput)
 			}
 		})
 	}
