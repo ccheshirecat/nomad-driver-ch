@@ -316,8 +316,9 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 	proc.MAC = d.generateMAC(config.Name)
 
 	// Generate short TAP name to fit Linux's 15-char limit (IFNAMSIZ)
-	// Use prefix + hash of name to ensure uniqueness
-	nameHash := fmt.Sprintf("%x", sha256.Sum256([]byte(config.Name)))[:8]
+	// Use prefix + hash of name + current nanosecond time for uniqueness
+	uniqueStr := fmt.Sprintf("%s-%d", config.Name, time.Now().UnixNano())
+	nameHash := fmt.Sprintf("%x", sha256.Sum256([]byte(uniqueStr)))[:8]
 	proc.TapName = d.networkConfig.TAPPrefix + nameHash
 
 	// Create cloud-init ISO
