@@ -5,6 +5,7 @@ package cloudhypervisor
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"net/http"
@@ -313,7 +314,11 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 
 	// Generate MAC address deterministically
 	proc.MAC = d.generateMAC(config.Name)
-	proc.TapName = d.networkConfig.TAPPrefix + config.Name
+
+	// Generate short TAP name to fit Linux's 15-char limit (IFNAMSIZ)
+	// Use prefix + hash of name to ensure uniqueness
+	nameHash := fmt.Sprintf("%x", sha256.Sum256([]byte(config.Name)))[:8]
+	proc.TapName = d.networkConfig.TAPPrefix + nameHash
 
 	// Create cloud-init ISO
 	if err := d.createCloudInit(config, proc, workDir); err != nil {
