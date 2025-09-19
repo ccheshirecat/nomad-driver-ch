@@ -54,7 +54,7 @@ job "web-server" {
 
   group "web" {
     task "nginx" {
-      driver = "virt"
+      driver = "nomad-driver-ch"
 
       config {
         image = "/var/lib/images/alpine-nginx.img"
@@ -187,7 +187,7 @@ sudo systemctl restart nomad
 
 Verify the driver is loaded:
 ```bash
-nomad node status -self | grep virt
+nomad node status -self | grep nomad-driver-ch
 ```
 
 For detailed installation instructions, see [docs/INSTALLATION.md](docs/INSTALLATION.md).
@@ -277,7 +277,7 @@ job "basic-vm" {
 
   group "app" {
     task "vm" {
-      driver = "virt"
+      driver = "nomad-driver-ch"
 
       config {
         image = "/var/lib/images/ubuntu-22.04.img"
@@ -306,7 +306,7 @@ job "custom-vm" {
 
   group "web" {
     task "nginx" {
-      driver = "virt"
+      driver = "nomad-driver-ch"
 
       config {
         image = "/var/lib/images/alpine.img"
@@ -344,7 +344,7 @@ job "database" {
 
   group "db" {
     task "postgres" {
-      driver = "virt"
+      driver = "nomad-driver-ch"
 
       config {
         image = "/var/lib/images/postgres-14.img"
@@ -398,7 +398,8 @@ job "ml-workload" {
 
   group "gpu" {
     task "training" {
-      driver = "virt"
+      driver = "nomad-driver-ch"
+
 
       config {
         image = "/var/lib/images/cuda-ubuntu.img"
@@ -616,7 +617,7 @@ job "shared-storage" {
     }
 
     task "processor" {
-      driver = "virt"
+      driver = "nomad-driver-ch"
 
       config {
         image = "/var/lib/images/data-processor.img"
@@ -673,7 +674,7 @@ job "ai-training" {
 
   group "training" {
     task "model-training" {
-      driver = "virt"
+      driver = "nomad-driver-ch"
 
       config {
         image = "/var/lib/images/cuda-pytorch.img"
