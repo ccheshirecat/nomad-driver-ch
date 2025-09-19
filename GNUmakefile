@@ -1,4 +1,4 @@
-PLUGIN_BINARY:=nomad-driver-virt
+PLUGIN_BINARY:=nomad-driver-ch
 SHELL = bash
 
 THIS_OS := $(shell uname | cut -d- -f1)
