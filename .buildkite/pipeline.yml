@@ -85,16 +85,16 @@ steps:
       fi
 
       echo "--- Creating GitHub release"
-      cat > release_notes.md << EOF
-Release ${BUILDKITE_TAG} of nomad-driver-ch
+      cat > release_notes.md <<'EOF'
+      Release ${BUILDKITE_TAG} of nomad-driver-ch
 
-## Downloads
-- [nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz)
-- [nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz)
+      ## Downloads
+      - [nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz)
+      - [nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz)
 
-## Checksums
-See [nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt)
-EOF
+      ## Checksums
+      See [nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt)
+      EOF
       gh release create "${BUILDKITE_TAG}" \
         --title "Release ${BUILDKITE_TAG}" \
         --notes-file release_notes.md \
