@@ -208,6 +208,7 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 	baseConfig := &base.Config{}
 	config := &Config{
 		DataDir: dataDir,
+		ImagePaths: []string{"/root", dataDir}, // Allow images from /root and test temp dir
 		Network: domain.Network{
 			Bridge:      "br0",
 			SubnetCIDR:  "192.168.1.0/24",
