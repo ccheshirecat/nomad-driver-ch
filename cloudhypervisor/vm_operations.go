@@ -108,14 +108,14 @@ func (d *Driver) setupNetworking(proc *VMProcess) error {
 
 	// Set TAP interface up
 	cmd = exec.Command("ip", "link", "set", "dev", proc.TapName, "up")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to bring up tap interface: %w", err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to bring up tap interface %s: %w (output: %s)", proc.TapName, err, string(output))
 	}
 
 	// Add TAP to bridge
 	cmd = exec.Command("ip", "link", "set", "dev", proc.TapName, "master", d.networkConfig.Bridge)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to add tap to bridge: %w", err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to add tap %s to bridge %s: %w (output: %s)", proc.TapName, d.networkConfig.Bridge, err, string(output))
 	}
 
 	d.logger.Debug("networking setup complete",
