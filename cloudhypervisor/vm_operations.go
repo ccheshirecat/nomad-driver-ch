@@ -197,8 +197,8 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 			Size:   int64(config.Memory) * 1024 * 1024, // Convert MB to bytes
 			Shared: true, // Required for virtio-fs
 		},
-		Console: ConsoleConfig{Mode: "null"}, // Disable console
-		Serial:  SerialConfig{Mode: "file", File: filepath.Join(proc.WorkDir, "serial.log")},
+		Console: ConsoleConfig{Mode: "Null"}, // Disable console
+		Serial:  SerialConfig{Mode: "File", File: filepath.Join(proc.WorkDir, "serial.log")},
 	}
 
 	// Set kernel/initramfs/cmdline
