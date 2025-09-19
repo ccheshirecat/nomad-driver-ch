@@ -51,13 +51,14 @@ steps:
       set -euxo pipefail
       export PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
 
-      # Check if this is a tag build
-      if [[ -z "${BUILDKITE_TAG:-}" ]]; then
+      # Check if current commit has a tag
+      CURRENT_TAG=$(git describe --exact-match --tags HEAD 2>/dev/null || echo "")
+      if [[ -z "$CURRENT_TAG" ]]; then
         echo "Not a tag build, skipping release"
         exit 0
       fi
 
-      echo "--- Detected tag: ${BUILDKITE_TAG}"
+      echo "--- Detected tag: $CURRENT_TAG"
       echo "--- Building release binaries"
       export CGO_ENABLED=1
 
@@ -70,11 +71,11 @@ steps:
       GOOS=linux GOARCH=arm64 go build -o nomad-driver-ch-linux-arm64 ./...
 
       echo "--- Creating release archives"
-      tar -czf nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz nomad-driver-ch-linux-amd64
-      tar -czf nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz nomad-driver-ch-linux-arm64
+      tar -czf nomad-driver-ch-${CURRENT_TAG}-linux-amd64.tar.gz nomad-driver-ch-linux-amd64
+      tar -czf nomad-driver-ch-${CURRENT_TAG}-linux-arm64.tar.gz nomad-driver-ch-linux-arm64
 
       echo "--- Creating checksums"
-      sha256sum nomad-driver-ch-${BUILDKITE_TAG}-*.tar.gz > nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt
+      sha256sum nomad-driver-ch-${CURRENT_TAG}-*.tar.gz > nomad-driver-ch-${CURRENT_TAG}-checksums.txt
 
       echo "--- Installing GitHub CLI"
       if ! command -v gh &> /dev/null; then
@@ -85,24 +86,22 @@ steps:
       fi
 
       echo "--- Creating GitHub release"
-      cat > release_notes.md <<'EOF'
-      Release ${BUILDKITE_TAG} of nomad-driver-ch
-
-      ## Downloads
-      - [nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz)
-      - [nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz)
-
-      ## Checksums
-      See [nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt)
-      EOF
-      gh release create "${BUILDKITE_TAG}" \
-        --title "Release ${BUILDKITE_TAG}" \
+      echo "Release ${CURRENT_TAG} of nomad-driver-ch" > release_notes.md
+      echo "" >> release_notes.md
+      echo "Downloads:" >> release_notes.md
+      echo "- nomad-driver-ch-${CURRENT_TAG}-linux-amd64.tar.gz" >> release_notes.md
+      echo "- nomad-driver-ch-${CURRENT_TAG}-linux-arm64.tar.gz" >> release_notes.md
+      echo "" >> release_notes.md
+      echo "Checksums:" >> release_notes.md
+      echo "See nomad-driver-ch-${CURRENT_TAG}-checksums.txt for file checksums" >> release_notes.md
+      gh release create "${CURRENT_TAG}" \
+        --title "Release ${CURRENT_TAG}" \
         --notes-file release_notes.md \
-        nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz \
-        nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz \
-        nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt
+        nomad-driver-ch-${CURRENT_TAG}-linux-amd64.tar.gz \
+        nomad-driver-ch-${CURRENT_TAG}-linux-arm64.tar.gz \
+        nomad-driver-ch-${CURRENT_TAG}-checksums.txt
 
-      echo "--- Release ${BUILDKITE_TAG} created successfully!"
+      echo "--- Release ${CURRENT_TAG} created successfully!"
 
 env:
   KERNEL_PATH: "/root/vmlinux-normal"
