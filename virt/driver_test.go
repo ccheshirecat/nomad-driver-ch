@@ -560,9 +560,8 @@ func TestVirtDriver_ImageOptions(t *testing.T) {
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	mockImage, err := os.CreateTemp(tempDir, "test-*.img")
-	must.NoError(t, err)
-	defer os.Remove(mockImage.Name())
+	// Create unique disk image for this test to avoid locking conflicts
+	uniqueRootfsPath := createUniqueRootfsImage(t, tempDir)
 
 	allocID := uuid.Generate()
 
@@ -587,7 +586,7 @@ func TestVirtDriver_ImageOptions(t *testing.T) {
 		{
 			name:           "no_copy_requested",
 			enableThinCopy: false,
-			expectedPath:   mockImage.Name(), // When no copy, use original image path
+			expectedPath:   uniqueRootfsPath, // When no copy, use original image path
 			expectedFormat: "tif",
 		},
 		{
@@ -600,7 +599,7 @@ func TestVirtDriver_ImageOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			taskCfg := newTaskConfig(t, mockImage.Name())
+			taskCfg := newTaskConfig(t, uniqueRootfsPath)
 			taskCfg.UseThinCopy = tt.enableThinCopy
 
 			taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
@@ -671,8 +670,15 @@ func TestVirtDriver_Start_Wait_Destroy_LibvirtIntegration(t *testing.T) {
 		imageFormat: "qcow2",
 	}
 
-	// Use real Cloud Hypervisor integration - no mock virtualizer
-	d := virtDriverHarness(t, nil, nil, mockImageHandler, tempDir)
+	// Use real Cloud Hypervisor integration - no mock virtualizer but need taskGetter
+	// Create mock taskGetter that returns running state for integration test
+	mockTaskGetter := &mockTaskGetter{
+		info: &domain.Info{
+			State: "running",
+		},
+	}
+
+	d := virtDriverHarness(t, nil, mockTaskGetter, mockImageHandler, tempDir)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
