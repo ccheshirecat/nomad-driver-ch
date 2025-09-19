@@ -47,11 +47,17 @@ steps:
         go test -v -count=1 ./...
 
   - label: "🚀 Release"
-    if: 'build.tag != null'
     command: |
       set -euxo pipefail
       export PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
 
+      # Check if this is a tag build
+      if [[ -z "${BUILDKITE_TAG:-}" ]]; then
+        echo "Not a tag build, skipping release"
+        exit 0
+      fi
+
+      echo "--- Detected tag: ${BUILDKITE_TAG}"
       echo "--- Building release binaries"
       export CGO_ENABLED=1
 
@@ -59,11 +65,18 @@ steps:
       echo "Building for linux/amd64..."
       GOOS=linux GOARCH=amd64 go build -o nomad-driver-ch-linux-amd64 ./...
 
+      # Build for Linux ARM64
+      echo "Building for linux/arm64..."
+      GOOS=linux GOARCH=arm64 go build -o nomad-driver-ch-linux-arm64 ./...
 
       echo "--- Creating release archives"
       tar -czf nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz nomad-driver-ch-linux-amd64
+      tar -czf nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz nomad-driver-ch-linux-arm64
 
-      echo "--- Creating GitHub release"
+      echo "--- Creating checksums"
+      sha256sum nomad-driver-ch-${BUILDKITE_TAG}-*.tar.gz > nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt
+
+      echo "--- Installing GitHub CLI"
       if ! command -v gh &> /dev/null; then
         echo "Installing GitHub CLI..."
         curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
@@ -71,11 +84,22 @@ steps:
         apt update && apt install -y gh
       fi
 
-      echo "--- Uploading release"
+      echo "--- Creating GitHub release"
       gh release create "${BUILDKITE_TAG}" \
         --title "Release ${BUILDKITE_TAG}" \
-        --notes "Release ${BUILDKITE_TAG} of nomad-driver-ch" \
+        --notes "Release ${BUILDKITE_TAG} of nomad-driver-ch
+
+## Downloads
+- [nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz)
+- [nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz)
+
+## Checksums
+See [nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt](https://github.com/ccheshirecat/nomad-driver-ch/releases/download/${BUILDKITE_TAG}/nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt)" \
         nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz \
+        nomad-driver-ch-${BUILDKITE_TAG}-linux-arm64.tar.gz \
+        nomad-driver-ch-${BUILDKITE_TAG}-checksums.txt
+
+      echo "--- Release ${BUILDKITE_TAG} created successfully!"
 
 env:
   KERNEL_PATH: "/root/vmlinux-normal"
@@ -85,6 +109,8 @@ env:
   BRIDGE: "br0"
   # GitHub token for releases - set this in Buildkite environment
   GITHUB_TOKEN: "${GITHUB_TOKEN}"
+  # Ensure git tags are fetched for release builds
+  BUILDKITE_GIT_FETCH_FLAGS: "-v --prune --tags"
 
 agents:
   # Run on the agent with Cloud Hypervisor capabilities
