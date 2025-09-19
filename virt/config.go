@@ -60,7 +60,7 @@ var (
 			),
 			"tap_prefix": hclspec.NewDefault(
 				hclspec.NewAttr("tap_prefix", "string", false),
-				hclspec.NewLiteral(`"tap-"`),
+				hclspec.NewLiteral(`"tap"`),
 			),
 		})),
 		"vfio": hclspec.NewBlock("vfio", false, hclspec.NewObject(map[string]*hclspec.Spec{

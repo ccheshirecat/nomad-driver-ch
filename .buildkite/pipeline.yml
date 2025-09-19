@@ -37,7 +37,7 @@ steps:
 
       echo "--- Integration tests"
       sudo -E env \
-        PATH="$PATH" \
+        PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH" \
         CGO_ENABLED=1 \
         KERNEL_PATH="${KERNEL_PATH:-/root/vmlinux-normal}" \
         INITRD_PATH="${INITRD_PATH:-/root/raiin-fc.cpio.gz}" \
