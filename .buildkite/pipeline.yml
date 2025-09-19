@@ -46,12 +46,45 @@ steps:
         BRIDGE="${BRIDGE:-br0}" \
         go test -v -count=1 ./...
 
+  - label: "🚀 Release"
+    if: 'build.tag != null'
+    command: |
+      set -euxo pipefail
+      export PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
+
+      echo "--- Building release binaries"
+      export CGO_ENABLED=1
+
+      # Build for Linux AMD64
+      echo "Building for linux/amd64..."
+      GOOS=linux GOARCH=amd64 go build -o nomad-driver-ch-linux-amd64 ./...
+
+
+      echo "--- Creating release archives"
+      tar -czf nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz nomad-driver-ch-linux-amd64
+
+      echo "--- Creating GitHub release"
+      if ! command -v gh &> /dev/null; then
+        echo "Installing GitHub CLI..."
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        apt update && apt install -y gh
+      fi
+
+      echo "--- Uploading release"
+      gh release create "${BUILDKITE_TAG}" \
+        --title "Release ${BUILDKITE_TAG}" \
+        --notes "Release ${BUILDKITE_TAG} of nomad-driver-ch" \
+        nomad-driver-ch-${BUILDKITE_TAG}-linux-amd64.tar.gz \
+
 env:
   KERNEL_PATH: "/root/vmlinux-normal"
   INITRD_PATH: "/root/raiin-fc.cpio.gz"
   ROOTFS_PATH: "/root/rootfs.img"
   CH_BIN: "/usr/bin/cloud-hypervisor"
   BRIDGE: "br0"
+  # GitHub token for releases - set this in Buildkite environment
+  GITHUB_TOKEN: "${GITHUB_TOKEN}"
 
 agents:
   # Run on the agent with Cloud Hypervisor capabilities
