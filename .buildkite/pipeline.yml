@@ -2,7 +2,7 @@ steps:
   - label: "🏗️ Build & Unit Tests"
     command: |
       set -euxo pipefail
-      source ~/.zshrc
+      export PATH="/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
 
       echo "--- Go environment"
       go version
@@ -21,7 +21,7 @@ steps:
   - label: "🔬 Cloud Hypervisor Integration Test"
     command: |
       set -euxo pipefail
-      source ~/.zshrc
+      export PATH="/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
 
       echo "--- Verify Cloud Hypervisor binary"
       cloud-hypervisor --version
