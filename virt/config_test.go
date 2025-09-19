@@ -148,7 +148,12 @@ config {
 							Ports: []string{"ssh"},
 						},
 					},
-				}},
+				},
+				// Initialize Cloud Hypervisor fields as empty slices
+				Disks:    []DiskConfig{},
+				FSMounts: []FSMountConfig{},
+				Devices:  []DeviceConfig{},
+			},
 		},
 	}
 

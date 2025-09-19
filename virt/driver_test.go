@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -141,6 +140,22 @@ func (mv *mockVirtualizar) GetNetworkInterfaces(name string) ([]domain.NetworkIn
 	return []domain.NetworkInterface{}, nil
 }
 
+func (mv *mockVirtualizar) GetDomain(name string) (*domain.Info, error) {
+	mv.lock.Lock()
+	defer mv.lock.Unlock()
+
+	if mv.count > 0 {
+		return &domain.Info{
+			State:     "running",
+			Memory:    512 * 1024 * 1024,
+			CPUTime:   1000,
+			MaxMemory: 512 * 1024 * 1024,
+			NrVirtCPU: 1,
+		}, nil
+	}
+	return nil, fmt.Errorf("domain not found")
+}
+
 func (mv *mockVirtualizar) GetAllDomains() ([]domain.Info, error) {
 	mv.lock.Lock()
 	defer mv.lock.Unlock()
@@ -149,8 +164,11 @@ func (mv *mockVirtualizar) GetAllDomains() ([]domain.Info, error) {
 	domains := make([]domain.Info, mv.count)
 	for i := 0; i < mv.count; i++ {
 		domains[i] = domain.Info{
-			Name:  fmt.Sprintf("test-domain-%d", i),
-			State: "running",
+			State:     "running",
+			Memory:    512 * 1024 * 1024, // 512MB
+			CPUTime:   1000,
+			MaxMemory: 512 * 1024 * 1024,
+			NrVirtCPU: 1,
 		}
 	}
 	return domains, nil
@@ -212,10 +230,22 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 	return harness
 }
 
-func newTaskConfig(image string) TaskConfig {
+func newTaskConfig(t *testing.T, image string) TaskConfig {
+	// Create temporary user data file
+	tmpFile, err := os.CreateTemp("", "userdata-*.txt")
+	if err != nil {
+		t.Fatalf("Failed to create temp user data file: %v", err)
+	}
+	tmpFile.WriteString("#cloud-config\nusers:\n  - name: testuser\n")
+	tmpFile.Close()
+
+	t.Cleanup(func() {
+		os.Remove(tmpFile.Name())
+	})
+
 	return TaskConfig{
 		ImagePath:           image,
-		UserData:            "/path/to/user/data",
+		UserData:            tmpFile.Name(),
 		CMDs:                []string{"cmd arg arg", "cmd arg arg"},
 		DefaultUserSSHKey:   "ssh-ed666 randomkey",
 		DefaultUserPassword: "password",
@@ -240,7 +270,7 @@ func TestVirtDriver_Start_Wait_Destroy(t *testing.T) {
 	defer os.Remove(mockImage.Name())
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(mockImage.Name())
+	taskCfg := newTaskConfig(t, mockImage.Name())
 
 	taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
 	task := &drivers.TaskConfig{
@@ -255,7 +285,7 @@ func TestVirtDriver_Start_Wait_Destroy(t *testing.T) {
 
 	mockTaskGetter := &mockTaskGetter{
 		info: &domain.Info{
-			State: running,
+			State: "running",
 		},
 	}
 
@@ -368,7 +398,7 @@ func TestVirtDriver_Start_Recover_Destroy(t *testing.T) {
 	defer os.Remove(mockImage.Name())
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(mockImage.Name())
+	taskCfg := newTaskConfig(t, mockImage.Name())
 
 	taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
 	task := &drivers.TaskConfig{
@@ -383,7 +413,7 @@ func TestVirtDriver_Start_Recover_Destroy(t *testing.T) {
 
 	mockTaskGetter := &mockTaskGetter{
 		info: &domain.Info{
-			State: running,
+			State: "running",
 		},
 	}
 
@@ -431,7 +461,7 @@ func TestVirtDriver_Start_Wait_Crashed(t *testing.T) {
 	defer os.Remove(mockImage.Name())
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(mockImage.Name())
+	taskCfg := newTaskConfig(t, mockImage.Name())
 
 	taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
 	task := &drivers.TaskConfig{
@@ -446,7 +476,7 @@ func TestVirtDriver_Start_Wait_Crashed(t *testing.T) {
 
 	mockTaskGetter := &mockTaskGetter{
 		info: &domain.Info{
-			State: crashed,
+			State: "crashed",
 		},
 	}
 
@@ -500,7 +530,7 @@ func TestVirtDriver_ImageOptions(t *testing.T) {
 
 	mockTaskGetter := &mockTaskGetter{
 		info: &domain.Info{
-			State: running,
+			State: "running",
 		},
 	}
 
@@ -530,7 +560,7 @@ func TestVirtDriver_ImageOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			taskCfg := newTaskConfig(mockImage.Name())
+			taskCfg := newTaskConfig(t, mockImage.Name())
 			taskCfg.UseThinCopy = tt.enableThinCopy
 
 			taskID := fmt.Sprintf("%s/%s/%s", allocID[:7], "task-name", "0000000")
@@ -582,7 +612,7 @@ func TestVirtDriver_Start_Wait_Destroy_LibvirtIntegration(t *testing.T) {
 	defer os.Remove(mockImage.Name())
 
 	allocID := uuid.Generate()
-	taskCfg := newTaskConfig(mockImage.Name())
+	taskCfg := newTaskConfig(t, mockImage.Name())
 	taskCfg.UserData = ""
 	taskCfg.OS = &OS{
 		Arch:    "x86_64",
@@ -602,7 +632,6 @@ func TestVirtDriver_Start_Wait_Destroy_LibvirtIntegration(t *testing.T) {
 		imageFormat: "qcow2",
 	}
 
-	cloudInitMock := cloudInitMock{}
 
 	v := &mockVirtualizar{
 		count: 1, // Simulate initial test hypervisor domain
