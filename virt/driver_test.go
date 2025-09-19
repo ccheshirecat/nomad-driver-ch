@@ -334,7 +334,7 @@ func TestVirtDriver_Start_Wait_Destroy(t *testing.T) {
 	must.Eq(t, 3, callConfig.CPUs)
 	must.StrContains(t, "arch", callConfig.OsVariant.Arch)
 	must.StrContains(t, "machine", callConfig.OsVariant.Machine)
-	must.StrContains(t, mockImage.Name(), callConfig.BaseImage)
+	must.StrContains(t, rootfsPath, callConfig.BaseImage)
 	must.StrContains(t, "tif", callConfig.DiskFmt)
 	must.Eq(t, 2666, callConfig.PrimaryDiskSize)
 	must.StrContains(t, "nomad-task-name-0000000", callConfig.HostName)
@@ -583,7 +583,7 @@ func TestVirtDriver_ImageOptions(t *testing.T) {
 		{
 			name:           "no_copy_requested",
 			enableThinCopy: false,
-			expectedPath:   fmt.Sprintf("%s/%s.img", tempDir, mockImage.Name()),
+			expectedPath:   mockImage.Name(), // When no copy, use original image path
 			expectedFormat: "tif",
 		},
 		{

@@ -49,7 +49,30 @@ runcmd:
 
 {{- $length_bcmd := len .VendorData.BootCMD }} {{- if or (ne $length_bcmd 0) }}
 bootcmd:
-  {{- range .VendorData.BootCMD}}  
+  {{- range .VendorData.BootCMD}}
   - {{.}}
   {{- end }}
+{{- end }}
+
+{{- if .VendorData.Network }}
+network:
+  version: 2
+  ethernets:
+    {{- if .VendorData.Network.Interface }}{{ .VendorData.Network.Interface }}{{- else }}eth0{{- end }}:
+      {{- if .VendorData.Network.Address }}
+      addresses:
+        - {{ .VendorData.Network.Address }}{{- if .VendorData.Network.Netmask }}/{{ .VendorData.Network.Netmask }}{{- end }}
+      {{- if .VendorData.Network.Gateway }}
+      gateway4: {{ .VendorData.Network.Gateway }}
+      {{- end }}
+      {{- else }}
+      dhcp4: true
+      {{- end }}
+      {{- if .VendorData.Network.Nameservers }}
+      nameservers:
+        addresses:
+          {{- range .VendorData.Network.Nameservers }}
+          - {{ . }}
+          {{- end }}
+      {{- end }}
 {{- end }}

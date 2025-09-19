@@ -37,6 +37,22 @@ type NetworkInterfaceBridgeConfig struct {
 	// via mapping to the network interface. These labels must exist within the
 	// job specification network block.
 	Ports []string `codec:"ports"`
+
+	// StaticIP allows specifying a static IP address for the VM interface
+	// If not specified, IP allocation will be handled by the driver's IP pool
+	StaticIP string `codec:"static_ip"`
+
+	// Gateway specifies the gateway for this network interface
+	// If not specified, the driver's default gateway will be used
+	Gateway string `codec:"gateway"`
+
+	// Netmask specifies the subnet mask (CIDR notation, e.g., "24")
+	// If not specified, the driver's default subnet mask will be used
+	Netmask string `codec:"netmask"`
+
+	// DNS specifies custom DNS servers for this interface
+	// If not specified, default DNS servers will be used
+	DNS []string `codec:"dns"`
 }
 
 // Validate ensures the NetworkInterfaces is a valid object supported by the
@@ -75,8 +91,12 @@ func (n *NetworkInterfacesConfig) Validate() error {
 func NetworkInterfaceHCLSpec() *hclspec.Spec {
 	return hclspec.NewBlockList("network_interface", hclspec.NewObject(map[string]*hclspec.Spec{
 		"bridge": hclspec.NewBlock("bridge", false, hclspec.NewObject(map[string]*hclspec.Spec{
-			"name":  hclspec.NewAttr("name", "string", true),
-			"ports": hclspec.NewAttr("ports", "list(string)", false),
+			"name":      hclspec.NewAttr("name", "string", true),
+			"ports":     hclspec.NewAttr("ports", "list(string)", false),
+			"static_ip": hclspec.NewAttr("static_ip", "string", false),
+			"gateway":   hclspec.NewAttr("gateway", "string", false),
+			"netmask":   hclspec.NewAttr("netmask", "string", false),
+			"dns":       hclspec.NewAttr("dns", "list(string)", false),
 		})),
 	}))
 }

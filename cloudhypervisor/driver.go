@@ -305,10 +305,20 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 		StartedAt: time.Now(),
 	}
 
-	// Allocate IP address
-	ip, err := d.allocateIP()
-	if err != nil {
-		return fmt.Errorf("failed to allocate IP: %w", err)
+	// Allocate IP address - use task-specific static IP if provided, otherwise allocate from pool
+	var ip string
+	if len(config.NetworkInterfaces) > 0 && config.NetworkInterfaces[0].Bridge != nil && config.NetworkInterfaces[0].Bridge.StaticIP != "" {
+		// Use task-specified static IP
+		ip = config.NetworkInterfaces[0].Bridge.StaticIP
+		d.logger.Info("using task-specified static IP", "ip", ip, "vm", config.Name)
+	} else {
+		// Allocate IP from pool
+		var err error
+		ip, err = d.allocateIP()
+		if err != nil {
+			return fmt.Errorf("failed to allocate IP: %w", err)
+		}
+		d.logger.Debug("allocated IP from pool", "ip", ip, "vm", config.Name)
 	}
 	proc.IP = ip
 
