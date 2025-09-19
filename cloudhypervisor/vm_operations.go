@@ -203,12 +203,21 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 
 	// Set kernel/initramfs/cmdline
 	if config.BaseImage != "" {
-		// Check if we have kernel specified
-		kernel := d.config.DefaultKernel
-		initramfs := d.config.DefaultInitramfs
-		cmdline := "console=hvc0 root=/dev/vda1 rw"
+		// Use task config values if provided, otherwise fallback to defaults
+		kernel := config.Kernel
+		if kernel == "" {
+			kernel = d.config.DefaultKernel
+		}
 
-		// TODO: Extract kernel/initramfs/cmdline from task config when available
+		initramfs := config.Initramfs
+		if initramfs == "" {
+			initramfs = d.config.DefaultInitramfs
+		}
+
+		cmdline := config.Cmdline
+		if cmdline == "" {
+			cmdline = "console=hvc0 root=/dev/vda1 rw"
+		}
 
 		if kernel != "" && initramfs != "" {
 			vmConfig.Payload = &PayloadConfig{
