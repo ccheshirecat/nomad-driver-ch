@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	stdnet "net"
@@ -231,6 +230,16 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 	}
 	netInterface := netConfig[0]
 
+	// Determine which bridge to use - from task config if specified, otherwise from driver config
+	var bridgeName string
+	if netInterface.Bridge != nil && netInterface.Bridge.Name != "" {
+		bridgeName = netInterface.Bridge.Name
+		c.logger.Debug("using bridge from task configuration", "bridge", bridgeName)
+	} else {
+		bridgeName = c.networkConfig.Bridge
+		c.logger.Debug("using bridge from driver configuration", "bridge", bridgeName)
+	}
+
 	// For Cloud Hypervisor, we need to handle both static IP and DHCP cases
 	// If static IP is configured in the task, use it for port forwarding
 	// If DHCP is used, try to get the IP from dnsmasq lease file
@@ -244,6 +253,7 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 		mac := c.generateDeterministicMAC(req.DomainName)
 		c.logger.Debug("generated deterministic MAC for DHCP", "mac", mac, "vm", req.DomainName)
 
+		var err error
 		ipAddr, err = c.lookupDHCPLeaseByMAC(mac)
 		if err != nil {
 			c.logger.Warn("failed to lookup DHCP lease, port forwarding will be skipped", "error", err, "vm", req.DomainName)
@@ -262,16 +272,6 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 		}
 
 		c.logger.Info("found DHCP-assigned IP from lease file", "ip", ipAddr, "vm", req.DomainName)
-	}
-
-	// Determine which bridge to use - from task config if specified, otherwise from driver config
-	var bridgeName string
-	if netInterface.Bridge != nil && netInterface.Bridge.Name != "" {
-		bridgeName = netInterface.Bridge.Name
-		c.logger.Debug("using bridge from task configuration", "bridge", bridgeName)
-	} else {
-		bridgeName = c.networkConfig.Bridge
-		c.logger.Debug("using bridge from driver configuration", "bridge", bridgeName)
 	}
 
 	// Configure iptables rules for port forwarding
