@@ -63,19 +63,13 @@ steps:
 
       echo "--- Detected tag: $$CURRENT_TAG"
       echo "--- Building release binaries"
-      export CGO_ENABLED=1
 
-      # Build for Linux AMD64
+      # Build for Linux AMD64 (static)
       echo "Building for linux/amd64..."
-      GOOS=linux GOARCH=amd64 go build -o nomad-driver-ch-linux-amd64 ./...
-
-      # Build for Linux ARM64
-      echo "Building for linux/arm64..."
-      GOOS=linux GOARCH=arm64 go build -o nomad-driver-ch-linux-arm64 ./...
+      GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -a -ldflags '-extldflags "-static"' -o nomad-driver-ch-linux-amd64 .
 
       echo "--- Creating release archives"
       tar -czf nomad-driver-ch-$$CURRENT_TAG-linux-amd64.tar.gz nomad-driver-ch-linux-amd64
-      tar -czf nomad-driver-ch-$$CURRENT_TAG-linux-arm64.tar.gz nomad-driver-ch-linux-arm64
 
       echo "--- Creating checksums"
       sha256sum nomad-driver-ch-$$CURRENT_TAG-*.tar.gz > nomad-driver-ch-$$CURRENT_TAG-checksums.txt
@@ -93,15 +87,13 @@ steps:
       echo "" >> release_notes.md
       echo "Downloads:" >> release_notes.md
       echo "- nomad-driver-ch-$$CURRENT_TAG-linux-amd64.tar.gz" >> release_notes.md
-      echo "- nomad-driver-ch-$$CURRENT_TAG-linux-arm64.tar.gz" >> release_notes.md
-      echo "" >> release_notes.md
+            echo "" >> release_notes.md
       echo "Checksums:" >> release_notes.md
       echo "See nomad-driver-ch-$$CURRENT_TAG-checksums.txt for file checksums" >> release_notes.md
       gh release create "$$CURRENT_TAG" \
         --title "Release $$CURRENT_TAG" \
         --notes-file release_notes.md \
         nomad-driver-ch-$$CURRENT_TAG-linux-amd64.tar.gz \
-        nomad-driver-ch-$$CURRENT_TAG-linux-arm64.tar.gz \
         nomad-driver-ch-$$CURRENT_TAG-checksums.txt
 
       echo "--- Release $$CURRENT_TAG created successfully!"
