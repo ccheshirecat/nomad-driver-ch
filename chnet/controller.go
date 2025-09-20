@@ -234,6 +234,16 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 		return nil, fmt.Errorf("failed to get VM IP: %w", err)
 	}
 
+	// Determine which bridge to use - from task config if specified, otherwise from driver config
+	var bridgeName string
+	if netInterface.Bridge != nil && netInterface.Bridge.Name != "" {
+		bridgeName = netInterface.Bridge.Name
+		c.logger.Debug("using bridge from task configuration", "bridge", bridgeName)
+	} else {
+		bridgeName = c.networkConfig.Bridge
+		c.logger.Debug("using bridge from driver configuration", "bridge", bridgeName)
+	}
+
 	// Configure iptables rules for port forwarding
 	teardownRules, err := c.configureIPTables(req.Resources, netInterface.Bridge, ipAddr)
 	if err != nil {
@@ -248,7 +258,7 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 			IPTablesRules: teardownRules,
 			// No DHCP reservation for CH since we use static IPs
 			DHCPReservation: "",
-			Network:         c.networkConfig.Bridge,
+			Network:         bridgeName,
 		},
 	}, nil
 }

@@ -346,7 +346,7 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 	}
 
 	// Setup networking (create TAP interface)
-	if err := d.setupNetworking(proc); err != nil {
+	if err := d.setupNetworking(config, proc); err != nil {
 		d.deallocateIP(ip)
 		return fmt.Errorf("failed to setup networking: %w", err)
 	}
@@ -354,7 +354,8 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 	// Start virtiofsd processes for mounts
 	if err := d.startVirtiofsd(config, proc); err != nil {
 		d.deallocateIP(ip)
-		d.cleanupNetworking(proc)
+		d.cleanupNetworking(config, proc)
+		d.cleanupProcess(config, proc)
 		return fmt.Errorf("failed to start virtiofsd: %w", err)
 	}
 
@@ -380,14 +381,15 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 	// Start Cloud Hypervisor process
 	if err := d.startCHProcess(proc); err != nil {
 		d.deallocateIP(ip)
-		d.cleanupNetworking(proc)
+		d.cleanupNetworking(config, proc)
 		d.stopVirtiofsd(proc)
+		d.cleanupProcess(config, proc)
 		return fmt.Errorf("failed to start CH process: %w", err)
 	}
 
 	// Create and boot VM via REST API
 	if err := d.createAndBootVM(proc); err != nil {
-		d.cleanupProcess(proc)
+		d.cleanupProcess(config, proc)
 		d.deallocateIP(ip)
 		return fmt.Errorf("failed to create/boot VM: %w", err)
 	}

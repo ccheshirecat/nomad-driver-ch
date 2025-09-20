@@ -149,7 +149,7 @@ func convertFiles(domainFiles []domain.File) []cloudinit.File {
 }
 
 // setupNetworking creates TAP interface and attaches to bridge
-func (d *Driver) setupNetworking(proc *VMProcess) error {
+func (d *Driver) setupNetworking(config *domain.Config, proc *VMProcess) error {
 	// Create TAP interface
 	cmd := exec.Command("ip", "tuntap", "add", "dev", proc.TapName, "mode", "tap")
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -162,22 +162,32 @@ func (d *Driver) setupNetworking(proc *VMProcess) error {
 		return fmt.Errorf("failed to bring up tap interface %s: %w (output: %s)", proc.TapName, err, string(output))
 	}
 
+	// Determine which bridge to use - from task config if specified, otherwise from driver config
+	var bridgeName string
+	if len(config.NetworkInterfaces) > 0 && config.NetworkInterfaces[0].Bridge != nil && config.NetworkInterfaces[0].Bridge.Name != "" {
+		bridgeName = config.NetworkInterfaces[0].Bridge.Name
+		d.logger.Debug("using bridge from task configuration", "bridge", bridgeName)
+	} else {
+		bridgeName = d.networkConfig.Bridge
+		d.logger.Debug("using bridge from driver configuration", "bridge", bridgeName)
+	}
+
 	// Add TAP to bridge
-	cmd = exec.Command("ip", "link", "set", "dev", proc.TapName, "master", d.networkConfig.Bridge)
+	cmd = exec.Command("ip", "link", "set", "dev", proc.TapName, "master", bridgeName)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to add tap %s to bridge %s: %w (output: %s)", proc.TapName, d.networkConfig.Bridge, err, string(output))
+		return fmt.Errorf("failed to add tap %s to bridge %s: %w (output: %s)", proc.TapName, bridgeName, err, string(output))
 	}
 
 	d.logger.Debug("networking setup complete",
 		"tap", proc.TapName,
-		"bridge", d.networkConfig.Bridge,
+		"bridge", bridgeName,
 		"ip", proc.IP)
 
 	return nil
 }
 
 // cleanupNetworking removes TAP interface
-func (d *Driver) cleanupNetworking(proc *VMProcess) {
+func (d *Driver) cleanupNetworking(config *domain.Config, proc *VMProcess) {
 	if proc.TapName != "" {
 		cmd := exec.Command("ip", "link", "delete", "dev", proc.TapName)
 		if err := cmd.Run(); err != nil {
@@ -558,7 +568,7 @@ func (d *Driver) httpRequest(socketPath, method, path string, body []byte) (*htt
 }
 
 // cleanupProcess cleans up all resources associated with a VM process
-func (d *Driver) cleanupProcess(proc *VMProcess) {
+func (d *Driver) cleanupProcess(config *domain.Config, proc *VMProcess) {
 	// Stop virtiofsd processes
 	d.stopVirtiofsd(proc)
 
@@ -570,7 +580,7 @@ func (d *Driver) cleanupProcess(proc *VMProcess) {
 	}
 
 	// Cleanup networking
-	d.cleanupNetworking(proc)
+	d.cleanupNetworking(config, proc)
 
 	// Remove working directory
 	if proc.WorkDir != "" {
