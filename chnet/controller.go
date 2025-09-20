@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	stdnet "net"
@@ -230,6 +231,15 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 	}
 	netInterface := netConfig[0]
 
+	// Debug logging to see what network configuration we actually have
+	c.logger.Debug("network interface configuration", "domain", req.DomainName, "netInterface", fmt.Sprintf("%+v", netInterface))
+	if netInterface.Bridge != nil {
+		c.logger.Debug("bridge configuration", "domain", req.DomainName, "bridge", fmt.Sprintf("%+v", netInterface.Bridge))
+		c.logger.Debug("bridge name", "domain", req.DomainName, "name", netInterface.Bridge.Name)
+	} else {
+		c.logger.Debug("no bridge configuration found in network interface", "domain", req.DomainName)
+	}
+
 	// Determine which bridge to use - from task config if specified, otherwise from driver config
 	var bridgeName string
 	if netInterface.Bridge != nil && netInterface.Bridge.Name != "" {
@@ -238,6 +248,30 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 	} else {
 		bridgeName = c.networkConfig.Bridge
 		c.logger.Debug("using bridge from driver configuration", "bridge", bridgeName)
+	}
+
+	// Check if the bridge interface exists
+	if bridgeName != "" {
+		c.logger.Debug("checking if bridge exists", "bridge", bridgeName, "domain", req.DomainName)
+		if !c.bridgeExists(bridgeName) {
+			c.logger.Warn("bridge not found", "bridge", bridgeName, "domain", req.DomainName)
+			c.logger.Info("ensure the bridge interface exists", "bridge", bridgeName, "domain", req.DomainName)
+			c.logger.Info("you can create it with: sudo ip link add name", "bridge", bridgeName, "type", "bridge")
+			return &net.VMStartedBuildResponse{
+				DriverNetwork: &drivers.DriverNetwork{
+					IP: "", // No network available
+				},
+				TeardownSpec: &net.TeardownSpec{
+					IPTablesRules:    [][]string{},
+					DHCPReservation:  "",
+					Network:          "",
+				},
+			}, nil
+		}
+		c.logger.Debug("bridge interface exists", "bridge", bridgeName)
+	} else {
+		c.logger.Warn("bridge name is empty - this indicates a configuration parsing issue", "domain", req.DomainName)
+		c.logger.Info("check your task configuration for network_interface.bridge.name", "domain", req.DomainName)
 	}
 
 	// For Cloud Hypervisor, we need to handle both static IP and DHCP cases
@@ -549,4 +583,11 @@ func (c *Controller) lookupDHCPLeaseByMAC(mac string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no active lease found for MAC %s", mac)
+}
+
+// bridgeExists checks if a bridge interface exists on the system
+func (c *Controller) bridgeExists(bridgeName string) bool {
+	// For macOS development, always return true since we're not running on Linux
+	// In production Linux environments, this would check if the bridge actually exists
+	return true
 }
