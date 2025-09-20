@@ -583,6 +583,46 @@ Cloud-init automatically generates network configuration based on:
 - Driver network configuration
 - DHCP fallback for dynamic assignment
 
+## 🌐 Networking
+
+### Static IP Configuration
+For static IP assignment, configure the IP in your task:
+
+```hcl
+network_interface {
+  bridge {
+    name  = "br0"
+    static_ip = "192.168.1.100"
+    ports = ["http", "https"]
+  }
+}
+```
+
+### DHCP Configuration
+For DHCP assignment, omit the `static_ip` field:
+
+```hcl
+network_interface {
+  bridge {
+    name  = "br0"
+    ports = ["http", "https"]  # Port forwarding works with DHCP!
+  }
+}
+```
+
+**DHCP Support**: The driver automatically discovers DHCP-assigned IP addresses by parsing dnsmasq lease files. This enables automatic port forwarding for DHCP-based VMs. The driver generates deterministic MAC addresses from task IDs to ensure consistent IP assignment.
+
+**Requirements for DHCP**:
+- dnsmasq DHCP server running on the host
+- Lease file accessible at `/var/lib/misc/dnsmasq.leases`
+- VM must receive DHCP lease within the normal timeframe
+
+**How it works**:
+1. Driver generates deterministic MAC address from task ID
+2. VM boots and gets DHCP lease with that MAC
+3. Driver parses dnsmasq lease file to find IP for that MAC
+4. Port forwarding rules are set up automatically using the discovered IP
+
 ## 💾 Storage
 
 ### Disk Images

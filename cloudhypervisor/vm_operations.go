@@ -186,6 +186,16 @@ func (d *Driver) setupNetworking(config *domain.Config, proc *VMProcess) error {
 	return nil
 }
 
+// cleanupNetworkingWithBridge removes TAP interface using a specific bridge
+func (d *Driver) cleanupNetworkingWithBridge(bridgeName string, proc *VMProcess) {
+	if proc.TapName != "" {
+		cmd := exec.Command("ip", "link", "delete", "dev", proc.TapName)
+		if err := cmd.Run(); err != nil {
+			d.logger.Warn("failed to cleanup tap interface", "tap", proc.TapName, "error", err)
+		}
+	}
+}
+
 // cleanupNetworking removes TAP interface
 func (d *Driver) cleanupNetworking(config *domain.Config, proc *VMProcess) {
 	if proc.TapName != "" {
@@ -579,8 +589,12 @@ func (d *Driver) cleanupProcess(config *domain.Config, proc *VMProcess) {
 		}
 	}
 
-	// Cleanup networking
-	d.cleanupNetworking(config, proc)
+	// Cleanup networking - use driver config bridge if config is nil
+	if config == nil {
+		d.cleanupNetworkingWithBridge(d.networkConfig.Bridge, proc)
+	} else {
+		d.cleanupNetworking(config, proc)
+	}
 
 	// Remove working directory
 	if proc.WorkDir != "" {

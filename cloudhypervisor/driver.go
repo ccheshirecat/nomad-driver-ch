@@ -222,7 +222,7 @@ func (d *Driver) monitorCtx(ctx context.Context) {
 	// Cleanup all running processes
 	for name, proc := range d.processes {
 		d.logger.Warn("forcefully stopping VM on shutdown", "vm", name)
-		d.cleanupProcess(proc)
+		d.cleanupProcess(nil, proc)
 	}
 }
 
@@ -363,15 +363,16 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 	vmConfig, err := d.buildVMConfig(config, proc)
 	if err != nil {
 		d.deallocateIP(ip)
-		d.cleanupNetworking(proc)
+		d.cleanupNetworking(config, proc)
 		d.stopVirtiofsd(proc)
+		d.cleanupProcess(config, proc)
 		return fmt.Errorf("failed to build VM config: %w", err)
 	}
 
 	// Add VFIO devices if configured
 	if err := d.addVFIODevices(config, vmConfig); err != nil {
 		d.deallocateIP(ip)
-		d.cleanupNetworking(proc)
+		d.cleanupNetworking(config, proc)
 		d.stopVirtiofsd(proc)
 		return fmt.Errorf("failed to add VFIO devices: %w", err)
 	}
@@ -448,7 +449,7 @@ func (d *Driver) DestroyDomain(name string) error {
 	d.shutdownVM(proc)
 
 	// Cleanup everything
-	d.cleanupProcess(proc)
+	d.cleanupProcess(nil, proc)
 
 	// Deallocate IP
 	d.deallocateIP(proc.IP)

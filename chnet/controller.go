@@ -6,10 +6,15 @@
 package chnet
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
-	stdnet "net"
+	"os"
+	"regexp"
 	"strconv"
+	"strings"
+	stdnet "net"
+	"time"
 
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/hashicorp/go-hclog"
@@ -44,6 +49,9 @@ const (
 	// NetworkStateInactive is string representation to declare a network is in
 	// inactive state.
 	NetworkStateInactive = "inactive"
+
+	// Default dnsmasq lease file path
+	defaultDnsmasqLeaseFile = "/var/lib/misc/dnsmasq.leases"
 )
 
 // Controller implements the Net interface for Cloud Hypervisor networking
@@ -223,15 +231,37 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 	}
 	netInterface := netConfig[0]
 
-	// For Cloud Hypervisor, we get the IP from the VM process directly
-	// rather than discovering it via DHCP. The CH driver should provide
-	// this in the Hwaddrs field or we extract it differently.
+	// For Cloud Hypervisor, we need to handle both static IP and DHCP cases
+	// If static IP is configured in the task, use it for port forwarding
+	// If DHCP is used, try to get the IP from dnsmasq lease file
+	var ipAddr string
+	if netInterface.Bridge != nil && netInterface.Bridge.StaticIP != "" {
+		ipAddr = netInterface.Bridge.StaticIP
+		c.logger.Debug("using static IP from task configuration", "ip", ipAddr)
+	} else {
+		// DHCP case - try to get IP from dnsmasq lease file
+		// Generate deterministic MAC from domain name
+		mac := c.generateDeterministicMAC(req.DomainName)
+		c.logger.Debug("generated deterministic MAC for DHCP", "mac", mac, "vm", req.DomainName)
 
-	// For now, we'll extract IP from the domain name or use a static approach
-	// TODO: This should be provided by the CH driver through a better mechanism
-	ipAddr, err := c.getVMStaticIP(req.DomainName, req.Hwaddrs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get VM IP: %w", err)
+		ipAddr, err = c.lookupDHCPLeaseByMAC(mac)
+		if err != nil {
+			c.logger.Warn("failed to lookup DHCP lease, port forwarding will be skipped", "error", err, "vm", req.DomainName)
+			c.logger.Info("DHCP lease lookup failed - port forwarding not available", "vm", req.DomainName)
+			c.logger.Info("Check that dnsmasq is running and lease file exists at /var/lib/misc/dnsmasq.leases", "vm", req.DomainName)
+			return &net.VMStartedBuildResponse{
+				DriverNetwork: &drivers.DriverNetwork{
+					IP: "", // Will be determined by DHCP
+				},
+				TeardownSpec: &net.TeardownSpec{
+					IPTablesRules:    [][]string{}, // No port forwarding rules for DHCP
+					DHCPReservation:  "",
+					Network:          bridgeName,
+				},
+			}, nil
+		}
+
+		c.logger.Info("found DHCP-assigned IP from lease file", "ip", ipAddr, "vm", req.DomainName)
 	}
 
 	// Determine which bridge to use - from task config if specified, otherwise from driver config
@@ -454,4 +484,69 @@ func (c *Controller) VMTerminatedTeardown(req *net.VMTerminatedTeardownRequest) 
 	// No DHCP reservation cleanup needed for Cloud Hypervisor since we use static IPs
 
 	return &net.VMTerminatedTeardownResponse{}, mErr.ErrorOrNil()
+}
+
+// generateDeterministicMAC generates a deterministic MAC address from domain name
+// This ensures consistent MAC assignment for the same domain
+func (c *Controller) generateDeterministicMAC(domainName string) string {
+	// Use a simple hash-based approach to generate a deterministic MAC
+	// This ensures the same domain name always gets the same MAC address
+	hash := 0
+	for _, char := range domainName {
+		hash = hash*31 + int(char)
+	}
+
+	// Generate MAC with 52:54:00 prefix (QEMU/KVM range)
+	// Use the hash to generate the last 3 bytes
+	return fmt.Sprintf("52:54:00:%02x:%02x:%02x",
+		byte(hash>>16), byte(hash>>8), byte(hash))
+}
+
+// lookupDHCPLeaseByMAC looks up the IP address for a given MAC in dnsmasq lease file
+func (c *Controller) lookupDHCPLeaseByMAC(mac string) (string, error) {
+	leaseFile := defaultDnsmasqLeaseFile
+
+	// Read the dnsmasq lease file
+	file, err := os.Open(leaseFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("dnsmasq lease file not found at %s - ensure dnsmasq is installed and running with DHCP enabled", leaseFile)
+		}
+		return "", fmt.Errorf("failed to open dnsmasq lease file %s: %w", leaseFile, err)
+	}
+	defer file.Close()
+
+	// Parse dnsmasq lease file format: expiry IP MAC hostname client-id
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+
+		if len(fields) < 3 {
+			continue
+		}
+
+		// Check if MAC matches (dnsmasq stores MAC without colons)
+		leaseMAC := strings.ReplaceAll(fields[2], ":", "")
+		targetMAC := strings.ReplaceAll(mac, ":", "")
+
+		if leaseMAC == targetMAC {
+			// Check if lease is still active (expiry > current time)
+			expiry, err := strconv.ParseInt(fields[0], 10, 64)
+			if err != nil {
+				continue
+			}
+
+			if time.Now().Unix() < expiry {
+				c.logger.Debug("found active DHCP lease", "ip", fields[1], "mac", mac)
+				return fields[1], nil
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("error reading dnsmasq lease file: %w", err)
+	}
+
+	return "", fmt.Errorf("no active lease found for MAC %s", mac)
 }
