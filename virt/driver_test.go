@@ -68,12 +68,12 @@ func (mh *mockImageHandler) CreateThinCopy(basePath string, destination string, 
 	}
 }
 
-func (mh *mockImageHandler) GetImageInfo(basePath string) (*ImageInfo, error) {
+func (mh *mockImageHandler) GetImageInfo(basePath string) (*image_tools.ImageInfo, error) {
 	mh.basePath = basePath
 	if mh.err != nil {
 		return nil, mh.err
 	}
-	return &ImageInfo{
+	return &image_tools.ImageInfo{
 		Format:      mh.imageFormat,
 		VirtualSize: 10 * 1024 * 1024 * 1024, // 10GB default for testing
 	}, nil
