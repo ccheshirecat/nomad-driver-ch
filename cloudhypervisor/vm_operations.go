@@ -251,31 +251,32 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 		Serial:  SerialConfig{Mode: "File", File: filepath.Join(proc.WorkDir, "serial.log")},
 	}
 
-	// Set kernel/initramfs/cmdline
-	if config.BaseImage != "" {
-		// Use task config values if provided, otherwise fallback to defaults
-		kernel := config.Kernel
-		if kernel == "" {
-			kernel = d.config.DefaultKernel
-		}
+	// Set kernel/initramfs/cmdline - ALWAYS REQUIRED for Cloud Hypervisor
+	// Use task config values if provided, otherwise fallback to defaults
+	kernel := config.Kernel
+	if kernel == "" {
+		kernel = d.config.DefaultKernel
+	}
 
-		initramfs := config.Initramfs
-		if initramfs == "" {
-			initramfs = d.config.DefaultInitramfs
-		}
+	initramfs := config.Initramfs
+	if initramfs == "" {
+		initramfs = d.config.DefaultInitramfs
+	}
 
-		cmdline := config.Cmdline
-		if cmdline == "" {
-			cmdline = "console=hvc0 root=/dev/vda1 rw"
-		}
+	cmdline := config.Cmdline
+	if cmdline == "" {
+		cmdline = "console=hvc0 root=/dev/vda1 rw"
+	}
 
-		if kernel != "" && initramfs != "" {
-			vmConfig.Payload = &PayloadConfig{
-				Kernel:    kernel,
-				Cmdline:   cmdline,
-				Initramfs: initramfs, // Always required for Cloud Hypervisor
-			}
-		}
+	// Cloud Hypervisor has no bootloader - kernel and initramfs are ALWAYS required
+	if kernel == "" || initramfs == "" {
+		return nil, fmt.Errorf("kernel and initramfs are required - Cloud Hypervisor has no bootloader. kernel='%s', initramfs='%s'", kernel, initramfs)
+	}
+
+	vmConfig.Payload = &PayloadConfig{
+		Kernel:    kernel,
+		Cmdline:   cmdline,
+		Initramfs: initramfs,
 	}
 
 	// Add disks

@@ -40,6 +40,8 @@ The `nomad-driver-ch` is a task driver for [HashiCorp Nomad](https://www.nomadpr
 
 ### Prerequisites
 
+⚠️ **IMPORTANT**: Cloud Hypervisor has no bootloader. You MUST always provide both `kernel` and `initramfs` parameters in your task configuration, even when using full disk images. The driver will fail if either is missing.
+
 - **Nomad** v1.4.0 or later
 - **Cloud Hypervisor** v48.0.0 or later
 - **Linux kernel** with KVM support
@@ -283,7 +285,7 @@ job "basic-vm" {
         image = "/var/lib/images/ubuntu-22.04.img"
         hostname = "app-server"
 
-        # Custom kernel and initramfs
+        # REQUIRED: kernel and initramfs (Cloud Hypervisor has no bootloader)
         kernel = "/boot/vmlinuz-5.15.0"
         initramfs = "/boot/initramfs-5.15.0.img"
         cmdline = "console=ttyS0 root=/dev/vda1"
