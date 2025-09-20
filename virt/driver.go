@@ -629,6 +629,7 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		OsVariant:         osVariant,
 		BaseImage:         diskImagePath,
 		DiskFmt:           diskFormat,
+		PrimaryDiskSize:   driverConfig.PrimaryDiskSize,
 		HostName:          hostname,
 		Mounts:            allocFSMounts,
 		CMDs:              driverConfig.CMDs,
