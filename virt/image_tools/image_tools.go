@@ -55,7 +55,7 @@ func (q *QemuTools) GetImageInfo(basePath string) (*ImageInfo, error) {
 	if err != nil {
 		q.logger.Error("qemu-img read image", "stderr", stderrBuf.String())
 		q.logger.Debug("qemu-img read image", "stdout", stdoutBuf.String())
-		return "", err
+		return nil, err
 	}
 
 	q.logger.Debug("qemu-img read image", "stdout", stdoutBuf.String())
