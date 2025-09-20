@@ -16,7 +16,6 @@ func TestConfig_Validate(t *testing.T) {
 		Name:            "test-domain",
 		CPUs:            2,
 		Memory:          600,
-		PrimaryDiskSize: 26000,
 		BaseImage:       allowedPath + "image.qcow2",
 		OsVariant: &OSVariant{
 			Arch:    "x86_64",
@@ -39,7 +38,6 @@ func TestConfig_Validate(t *testing.T) {
 			config: Config{
 				Name:            validConfig.Name,
 				Memory:          validConfig.Memory,
-				PrimaryDiskSize: validConfig.PrimaryDiskSize,
 				CPUs:            validConfig.CPUs,
 				BaseImage:       "/path/not/allowed/image.qcow2",
 				OsVariant:       validConfig.OsVariant,
@@ -50,7 +48,6 @@ func TestConfig_Validate(t *testing.T) {
 			name: "Missing_domain_name",
 			config: Config{
 				Memory:          validConfig.Memory,
-				PrimaryDiskSize: validConfig.PrimaryDiskSize,
 				CPUs:            validConfig.CPUs,
 				BaseImage:       validConfig.BaseImage,
 				OsVariant:       validConfig.OsVariant,
@@ -62,7 +59,6 @@ func TestConfig_Validate(t *testing.T) {
 			config: Config{
 				Name:            validConfig.Name,
 				Memory:          validConfig.Memory,
-				PrimaryDiskSize: validConfig.PrimaryDiskSize,
 				CPUs:            validConfig.CPUs,
 				OsVariant:       validConfig.OsVariant,
 			},
@@ -73,7 +69,6 @@ func TestConfig_Validate(t *testing.T) {
 			config: Config{
 				Name:            validConfig.Name,
 				Memory:          2,
-				PrimaryDiskSize: validConfig.PrimaryDiskSize,
 				CPUs:            validConfig.CPUs,
 				BaseImage:       validConfig.BaseImage,
 				OsVariant:       validConfig.OsVariant,
@@ -81,23 +76,10 @@ func TestConfig_Validate(t *testing.T) {
 			wantErr: multierror.Append(nil, ErrNotEnoughMemory),
 		},
 		{
-			name: "Not_enough_disk_space",
-			config: Config{
-				Name:            validConfig.Name,
-				Memory:          validConfig.Memory,
-				PrimaryDiskSize: 2,
-				CPUs:            validConfig.CPUs,
-				BaseImage:       validConfig.BaseImage,
-				OsVariant:       validConfig.OsVariant,
-			},
-			wantErr: multierror.Append(nil, ErrNotEnoughDisk),
-		},
-		{
 			name: "No_cpus_assigned",
 			config: Config{
 				Name:            validConfig.Name,
 				Memory:          validConfig.Memory,
-				PrimaryDiskSize: validConfig.PrimaryDiskSize,
 				CPUs:            0,
 				BaseImage:       validConfig.BaseImage,
 				OsVariant:       validConfig.OsVariant,
@@ -109,7 +91,6 @@ func TestConfig_Validate(t *testing.T) {
 			config: Config{
 				Name:            validConfig.Name,
 				Memory:          validConfig.Memory,
-				PrimaryDiskSize: validConfig.PrimaryDiskSize,
 				CPUs:            validConfig.CPUs,
 				BaseImage:       validConfig.BaseImage,
 				OsVariant: &OSVariant{
@@ -128,7 +109,7 @@ func TestConfig_Validate(t *testing.T) {
 				},
 			},
 			wantErr: multierror.Append(nil, ErrEmptyName, ErrMissingImage,
-				ErrNotEnoughDisk, ErrNotEnoughMemory, ErrIncompleteOSVariant,
+				ErrNotEnoughMemory, ErrIncompleteOSVariant,
 				ErrNoCPUS),
 		},
 	}

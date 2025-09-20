@@ -18,7 +18,6 @@ import (
 )
 
 const (
-	minDiskMB     = 2000
 	minMemoryMB   = 500
 	maxNameLength = 63 // According to RFC 1123 (https://www.rfc-editor.org/rfc/rfc1123.html) should be at most 63 characters
 )
@@ -30,7 +29,6 @@ var (
 
 	ErrEmptyName           = errors.New("domain name can not be empty")
 	ErrMissingImage        = errors.New("image path can not be empty")
-	ErrNotEnoughDisk       = errors.New("not enough disk space assigned to task")
 	ErrNoCPUS              = errors.New("no cpus configured, use resources.cores to assign cores in the job spec")
 	ErrNotEnoughMemory     = errors.New("not enough memory assigned to task")
 	ErrIncompleteOSVariant = errors.New("provided os information is incomplete: arch and machine are mandatory ")
@@ -70,7 +68,6 @@ type Config struct {
 	OsVariant         *OSVariant
 	BaseImage         string
 	DiskFmt           string
-	PrimaryDiskSize   uint64
 	HostName          string
 	Timezone          *time.Location
 	Mounts            []MountFileConfig
@@ -103,9 +100,6 @@ func (dc *Config) Validate(allowedPaths []string) error {
 		}
 	}
 
-	if dc.PrimaryDiskSize > 0 && dc.PrimaryDiskSize < minDiskMB {
-		mErr = multierror.Append(mErr, ErrNotEnoughDisk)
-	}
 
 	if dc.Memory < minMemoryMB {
 		mErr = multierror.Append(mErr, ErrNotEnoughMemory)
@@ -143,7 +137,6 @@ func (dc *Config) Copy() *Config {
 		CPUs:              dc.CPUs,
 		BaseImage:         dc.BaseImage,
 		DiskFmt:           dc.DiskFmt,
-		PrimaryDiskSize:   dc.PrimaryDiskSize,
 		NetworkInterfaces: slices.Clone(dc.NetworkInterfaces),
 		HostName:          dc.HostName,
 		Mounts:            slices.Clone(dc.Mounts),

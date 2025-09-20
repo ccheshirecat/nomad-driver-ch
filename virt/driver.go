@@ -607,13 +607,6 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 
 	diskFormat := imageInfo.Format
 
-	// Auto-detect disk size if not specified by user
-	if driverConfig.PrimaryDiskSize == 0 {
-		// Convert bytes to MB
-		driverConfig.PrimaryDiskSize = uint64(imageInfo.VirtualSize / (1024 * 1024))
-		d.logger.Debug("auto-detected disk size", "path", diskImagePath, "size_mb", driverConfig.PrimaryDiskSize)
-	}
-
 	if driverConfig.UseThinCopy {
 		copyPath := filepath.Join(d.dataDir, taskName+".img")
 		d.logger.Info("creating thin copy at", "path", copyPath) // TODO: Put back at info
@@ -639,7 +632,6 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		OsVariant:         osVariant,
 		BaseImage:         diskImagePath,
 		DiskFmt:           diskFormat,
-		PrimaryDiskSize:   driverConfig.PrimaryDiskSize,
 		HostName:          hostname,
 		Mounts:            allocFSMounts,
 		CMDs:              driverConfig.CMDs,

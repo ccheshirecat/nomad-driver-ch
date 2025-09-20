@@ -67,6 +67,17 @@ func (mh *mockImageHandler) CreateThinCopy(basePath string, destination string, 
 	}
 }
 
+func (mh *mockImageHandler) GetImageInfo(basePath string) (*image_tools.ImageInfo, error) {
+	mh.basePath = basePath
+	if mh.err != nil {
+		return nil, mh.err
+	}
+	return &image_tools.ImageInfo{
+		Format:      mh.imageFormat,
+		VirtualSize: 10 * 1024 * 1024 * 1024, // 10GB default for testing
+	}, nil
+}
+
 type mockTaskGetter struct {
 	lock sync.RWMutex
 
@@ -298,7 +309,6 @@ func newTaskConfig(t *testing.T, image string) TaskConfig {
 		DefaultUserSSHKey:   "ssh-ed666 randomkey",
 		DefaultUserPassword: "password",
 		UseThinCopy:         false,
-		PrimaryDiskSize:     2666,
 		OS: &OS{
 			Arch:    "arch",
 			Machine: "machine",
