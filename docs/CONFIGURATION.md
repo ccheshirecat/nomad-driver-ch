@@ -292,7 +292,7 @@ task "example-vm" {
 
     # Storage configuration
     use_thin_copy = true
-    primary_disk_size = 10240
+    # primary_disk_size = 10240  # optional - auto-detected from image
 
     # Cloud Hypervisor specific
     kernel = "/boot/custom-kernel"
@@ -450,12 +450,12 @@ task "example-vm" {
   ```
 
 #### `primary_disk_size`
-- **Type**: `number`
-- **Default**: Image size
-- **Description**: Primary disk size in MB
+- **Type**: `number` (optional)
+- **Default**: Auto-detected from image
+- **Description**: Primary disk size in MB. If not specified, the driver will automatically detect the size from the disk image. Cloud Hypervisor uses the actual image size, so this parameter is primarily for validation and compatibility with libvirt-based drivers.
 - **Example**:
   ```hcl
-  primary_disk_size = 20480  # 20GB
+  primary_disk_size = 20480  # 20GB (optional)
   ```
 
 ### Cloud Hypervisor Specific

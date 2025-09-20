@@ -103,7 +103,7 @@ func (dc *Config) Validate(allowedPaths []string) error {
 		}
 	}
 
-	if dc.PrimaryDiskSize < minDiskMB {
+	if dc.PrimaryDiskSize > 0 && dc.PrimaryDiskSize < minDiskMB {
 		mErr = multierror.Append(mErr, ErrNotEnoughDisk)
 	}
 

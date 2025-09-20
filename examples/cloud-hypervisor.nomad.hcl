@@ -21,7 +21,7 @@ job "microvm-workload" {
       config {
         # Root filesystem image
         image = "/root/headless-shell.qcow2"
-        primary_disk_size = 10240  # 10GB
+        # primary_disk_size = 10240  # 10GB (optional - auto-detected from image)
 
         # Use custom kernel and initramfs for faster boot
         kernel   = "/root/vmlinux-normal"

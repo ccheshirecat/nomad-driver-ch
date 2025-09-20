@@ -133,6 +133,7 @@ type DomainGetter interface {
 
 type ImageHandler interface {
 	GetImageFormat(basePath string) (string, error)
+	GetImageInfo(basePath string) (*image_tools.ImageInfo, error)
 	CreateThinCopy(basePath string, destination string, sizeM int64) error
 }
 
@@ -599,9 +600,18 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		}
 	}
 
-	diskFormat, err := d.imageHandler.GetImageFormat(diskImagePath)
+	imageInfo, err := d.imageHandler.GetImageInfo(diskImagePath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("virt: unable to get disk format %s: %w", cfg.AllocID, err)
+		return nil, nil, fmt.Errorf("virt: unable to get disk info %s: %w", cfg.AllocID, err)
+	}
+
+	diskFormat := imageInfo.Format
+
+	// Auto-detect disk size if not specified by user
+	if driverConfig.PrimaryDiskSize == 0 {
+		// Convert bytes to MB
+		driverConfig.PrimaryDiskSize = uint64(imageInfo.VirtualSize / (1024 * 1024))
+		d.logger.Debug("auto-detected disk size", "path", diskImagePath, "size_mb", driverConfig.PrimaryDiskSize)
 	}
 
 	if driverConfig.UseThinCopy {

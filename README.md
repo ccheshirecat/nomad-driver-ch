@@ -354,7 +354,7 @@ job "database" {
 
         # Enable thin copy for faster startup
         use_thin_copy = true
-        primary_disk_size = 20480  # 20GB
+        # primary_disk_size = 20480  # 20GB (optional - auto-detected from image)
 
         # Network configuration with static IP
         network_interface {
@@ -602,7 +602,7 @@ Enable thin copy for faster VM startup:
 config {
   image = "/var/lib/images/base-ubuntu.img"
   use_thin_copy = true
-  primary_disk_size = 10240  # 10GB allocated space
+  # primary_disk_size = 10240  # 10GB allocated space (optional - auto-detected from image)
 }
 ```
 

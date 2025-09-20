@@ -27,8 +27,22 @@ func NewHandler(logger hclog.Logger) *QemuTools {
 	}
 }
 
+type ImageInfo struct {
+	Format   string
+	VirtualSize int64
+}
+
 // GetImageFormat runs `qemu-img info` to get the format of a disk image.
 func (q *QemuTools) GetImageFormat(basePath string) (string, error) {
+	info, err := q.GetImageInfo(basePath)
+	if err != nil {
+		return "", err
+	}
+	return info.Format, nil
+}
+
+// GetImageInfo runs `qemu-img info` to get the format and size of a disk image.
+func (q *QemuTools) GetImageInfo(basePath string) (*ImageInfo, error) {
 	q.logger.Debug("reading the disk format", "base", basePath)
 
 	var stdoutBuf, stderrBuf bytes.Buffer
@@ -46,18 +60,21 @@ func (q *QemuTools) GetImageFormat(basePath string) (string, error) {
 
 	q.logger.Debug("qemu-img read image", "stdout", stdoutBuf.String())
 
-	// The qemu command returns more information, but for now, only the format
-	// is necessary.
+	// Parse the qemu-img info output to get format and size
 	var output = struct {
-		Format string `json:"format"`
+		Format   string `json:"format"`
+		VirtualSize int64 `json:"virtual-size"`
 	}{}
 
 	err = json.Unmarshal(stdoutBuf.Bytes(), &output)
 	if err != nil {
-		return "", fmt.Errorf("qemu-img: unable read info response %s: %w", basePath, err)
+		return nil, fmt.Errorf("qemu-img: unable read info response %s: %w", basePath, err)
 	}
 
-	return output.Format, nil
+	return &ImageInfo{
+		Format:      output.Format,
+		VirtualSize: output.VirtualSize,
+	}, nil
 }
 
 func (q *QemuTools) CreateThinCopy(basePath string, destination string, sizeM int64) error {
