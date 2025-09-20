@@ -562,21 +562,21 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 
 	d.logger.Debug("starting task", "driver_cfg", hclog.Fmt("%+v\n", driverConfig))
 
-	// Ensure NetworkInterfaces is initialized if empty
-	if driverConfig.NetworkInterfaces == nil {
-		driverConfig.NetworkInterfaces = make(net.NetworkInterfacesConfig, 0)
-		d.logger.Debug("initialized empty NetworkInterfaces slice")
+	// Ensure NetworkInterfacesConfig is initialized if empty
+	if driverConfig.NetworkInterfacesConfig == nil {
+		driverConfig.NetworkInterfacesConfig = make(net.NetworkInterfacesConfig, 0)
+		d.logger.Debug("initialized empty NetworkInterfacesConfig slice")
 	}
 
 	// If no network interfaces are configured, create a default one
 	// This ensures VMs always have network connectivity by default
-	if len(driverConfig.NetworkInterfaces) == 0 {
-		defaultBridgeName := d.networkConfig.Bridge
+	if len(driverConfig.NetworkInterfacesConfig) == 0 {
+		defaultBridgeName := d.config.Network.Bridge
 		if defaultBridgeName == "" {
 			defaultBridgeName = "br0" // Fallback default
 		}
 
-		driverConfig.NetworkInterfaces = net.NetworkInterfacesConfig{
+		driverConfig.NetworkInterfacesConfig = net.NetworkInterfacesConfig{
 			{
 				Bridge: &net.NetworkInterfaceBridgeConfig{
 					Name: defaultBridgeName,
@@ -586,7 +586,7 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		d.logger.Debug("created default network interface", "bridge", defaultBridgeName)
 	} else {
 		// Log what network interfaces we found for debugging
-		for i, netInterface := range driverConfig.NetworkInterfaces {
+		for i, netInterface := range driverConfig.NetworkInterfacesConfig {
 			if netInterface.Bridge != nil {
 				d.logger.Debug("found network interface", "index", i, "bridge", netInterface.Bridge.Name)
 			} else {
@@ -710,16 +710,16 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 	// Build our network request to send now that the VM has been started. The
 	// response will contain our teardown spec, which gets stored in the task
 	// handle, so we can easily perform deletions.
-	d.logger.Debug("building network request", "domain", taskName, "netConfig", fmt.Sprintf("%+v", driverConfig.NetworkInterfaces))
-	if len(driverConfig.NetworkInterfaces) > 0 {
-		if driverConfig.NetworkInterfaces[0].Bridge != nil {
-			d.logger.Debug("bridge config in driver", "bridge", driverConfig.NetworkInterfaces[0].Bridge.Name)
+	d.logger.Debug("building network request", "domain", taskName, "netConfig", fmt.Sprintf("%+v", driverConfig.NetworkInterfacesConfig))
+	if len(driverConfig.NetworkInterfacesConfig) > 0 {
+		if driverConfig.NetworkInterfacesConfig[0].Bridge != nil {
+			d.logger.Debug("bridge config in driver", "bridge", driverConfig.NetworkInterfacesConfig[0].Bridge.Name)
 		}
 	}
 	netBuildReq := net.VMStartedBuildRequest{
 		DomainName: taskName,
 		Hostname:   hostname,
-		NetConfig:  &driverConfig.NetworkInterfaces,
+		NetConfig:  &driverConfig.NetworkInterfacesConfig,
 		Resources:  cfg.Resources,
 		Hwaddrs:    hwaddrs,
 	}
