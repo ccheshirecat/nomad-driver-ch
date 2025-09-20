@@ -13,6 +13,7 @@ import (
 
 	"github.com/ccheshirecat/nomad-driver-ch/cloudinit"
 	domain "github.com/ccheshirecat/nomad-driver-ch/internal/shared"
+	"github.com/ccheshirecat/nomad-driver-ch/virt/image_tools"
 	"github.com/ccheshirecat/nomad-driver-ch/virt/net"
 
 	"github.com/hashicorp/go-hclog"
@@ -67,12 +68,12 @@ func (mh *mockImageHandler) CreateThinCopy(basePath string, destination string, 
 	}
 }
 
-func (mh *mockImageHandler) GetImageInfo(basePath string) (*image_tools.ImageInfo, error) {
+func (mh *mockImageHandler) GetImageInfo(basePath string) (*ImageInfo, error) {
 	mh.basePath = basePath
 	if mh.err != nil {
 		return nil, mh.err
 	}
-	return &image_tools.ImageInfo{
+	return &ImageInfo{
 		Format:      mh.imageFormat,
 		VirtualSize: 10 * 1024 * 1024 * 1024, // 10GB default for testing
 	}, nil
