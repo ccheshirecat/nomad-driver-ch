@@ -298,7 +298,6 @@ func newTaskConfig(t *testing.T, image string) TaskConfig {
 		DefaultUserSSHKey:   "ssh-ed666 randomkey",
 		DefaultUserPassword: "password",
 		UseThinCopy:         false,
-		PrimaryDiskSize:     2666,
 		OS: &OS{
 			Arch:    "arch",
 			Machine: "machine",
