@@ -90,7 +90,9 @@ var (
 		"os": hclspec.NewBlock("os", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"arch":    hclspec.NewAttr("arch", "string", false),
 			"machine": hclspec.NewAttr("machine", "string", false),
+			"variant": hclspec.NewAttr("variant", "string", false),
 		})),
+		"timezone": hclspec.NewAttr("timezone", "string", false),
 		// Cloud Hypervisor specific fields
 		"kernel":       hclspec.NewAttr("kernel", "string", false),
 		"initramfs":    hclspec.NewAttr("initramfs", "string", false),
@@ -131,6 +133,10 @@ var (
 			"iommu_segments":     hclspec.NewAttr("iommu_segments", "list(number)", false),
 			"iommu_address_width": hclspec.NewAttr("iommu_address_width", "number", false),
 		})),
+		// VFIO device passthrough
+		"vfio_devices": hclspec.NewAttr("vfio_devices", "list(string)", false),
+		// USB device passthrough
+		"usb_devices":  hclspec.NewAttr("usb_devices", "list(string)", false),
 	})
 
 	// capabilities indicates what optional features this driver supports
@@ -171,6 +177,9 @@ type TaskConfig struct {
 	UserData            string         `codec:"user_data"`
 	TimeZone            *time.Location `codec:"timezone"`
 	CMDs                []string       `codec:"cmds"`
+	// Device passthrough
+	VFIODevices         []string       `codec:"vfio_devices"`
+	USBDevices          []string       `codec:"usb_devices"`
 	DefaultUserSSHKey   string         `codec:"default_user_authorized_ssh_key"`
 	DefaultUserPassword string         `codec:"default_user_password"`
 	UseThinCopy         bool           `codec:"use_thin_copy"`
@@ -196,8 +205,9 @@ type TaskConfig struct {
 }
 
 type OS struct {
-	Arch    string `codec:"arch"`
-	Machine string `codec:"machine"`
+ 	Arch    string `codec:"arch"`
+ 	Machine string `codec:"machine"`
+ 	Variant string `codec:"variant"`
 }
 
 

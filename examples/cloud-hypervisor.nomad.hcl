@@ -15,7 +15,7 @@ job "microvm-workload" {
 
     # Allocate resources
     task "vm" {
-      driver = "virt"
+      driver = "ch"
 
       # Basic VM configuration
       config {

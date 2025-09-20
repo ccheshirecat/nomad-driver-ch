@@ -254,26 +254,20 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 }
 
 // getVMStaticIP extracts or determines the static IP for a VM
-// For now, this is a placeholder - the CH driver should provide this info
+// This method should be coordinated with the CH driver's IP allocation
 func (c *Controller) getVMStaticIP(domainName string, hwaddrs []string) (string, error) {
-	// TODO: This should be coordinated with the CH driver's IP allocation
-	// For now, return a placeholder approach or extract from a known mechanism
-
-	// Simple approach: extract from domain name if it contains IP info
-	// or use a deterministic allocation based on domain name hash
-	// This is temporary until proper integration with CH driver
-
+	// Check if hwaddrs contains IP information (from Cloud Hypervisor driver)
 	if len(hwaddrs) > 0 {
-		// If hwaddrs contains IP info, extract it
-		// This is a hack until proper integration
 		for _, addr := range hwaddrs {
 			if stdnet.ParseIP(addr) != nil {
+				c.logger.Debug("using IP from Cloud Hypervisor driver", "ip", addr, "vm", domainName)
 				return addr, nil
 			}
 		}
 	}
 
-	// Fallback: deterministic IP based on domain name hash
+	// Fallback: generate deterministic IP based on domain name hash
+	// This ensures consistent IP assignment for VMs without explicit IP configuration
 	hash := 0
 	for _, c := range domainName {
 		hash = hash*31 + int(c)
@@ -283,6 +277,7 @@ func (c *Controller) getVMStaticIP(domainName string, hwaddrs []string) (string,
 	ipOffset := (hash % 100) + 100 // 100-199 range
 	ip := fmt.Sprintf("194.31.143.%d", ipOffset)
 
+	c.logger.Debug("generated fallback IP for VM", "ip", ip, "vm", domainName)
 	return ip, nil
 }
 

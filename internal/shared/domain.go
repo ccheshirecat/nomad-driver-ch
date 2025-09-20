@@ -55,8 +55,9 @@ type MountFileConfig struct {
 }
 
 type OSVariant struct {
-	Arch    string
-	Machine string
+ 	Arch    string
+ 	Machine string
+ 	Variant string
 }
 
 type Config struct {
@@ -158,6 +159,7 @@ func (dc *Config) Copy() *Config {
 		copy.OsVariant = &OSVariant{
 			Arch:    dc.OsVariant.Arch,
 			Machine: dc.OsVariant.Machine,
+			Variant: dc.OsVariant.Variant,
 		}
 	}
 

@@ -157,6 +157,14 @@ type DeviceConfig struct {
 	PCISegment  uint   `json:"pci_segment,omitempty"`
 }
 
+// VFIODeviceConfig represents a VFIO device configuration
+type VFIODeviceConfig struct {
+	Path        string `json:"path"`
+	ID          string `json:"id,omitempty"`
+	IOMMU       bool   `json:"iommu,omitempty"`
+	PCISegment  uint   `json:"pci_segment,omitempty"`
+}
+
 type ConsoleConfig struct {
 	Mode string `json:"mode"`
 }
@@ -358,6 +366,15 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 		d.stopVirtiofsd(proc)
 		return fmt.Errorf("failed to build VM config: %w", err)
 	}
+
+	// Add VFIO devices if configured
+	if err := d.addVFIODevices(config, vmConfig); err != nil {
+		d.deallocateIP(ip)
+		d.cleanupNetworking(proc)
+		d.stopVirtiofsd(proc)
+		return fmt.Errorf("failed to add VFIO devices: %w", err)
+	}
+
 	proc.Config = vmConfig
 
 	// Start Cloud Hypervisor process
@@ -613,6 +630,22 @@ func parseIPAddr(ipStr string) (net.IP, error) {
 		return nil, fmt.Errorf("invalid IP address: %s", ipStr)
 	}
 	return ip, nil
+}
+
+// addVFIODevices adds VFIO devices to the VM configuration
+func (d *Driver) addVFIODevices(config *domain.Config, vmConfig *VMConfig) error {
+	// TODO: Implement VFIO device passthrough
+	// This would require:
+	// 1. Validating VFIO device paths
+	// 2. Checking IOMMU configuration
+	// 3. Adding devices to VM configuration
+	// 4. Ensuring proper isolation
+
+	// For now, log that VFIO devices are configured but not yet implemented
+	d.logger.Info("VFIO device passthrough configured but not yet implemented",
+		"vm", config.Name)
+
+	return nil
 }
 
 // Additional methods will be implemented in separate files to keep this manageable

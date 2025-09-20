@@ -574,6 +574,7 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		osVariant = &domain.OSVariant{
 			Machine: driverConfig.OS.Machine,
 			Arch:    driverConfig.OS.Arch,
+			Variant: driverConfig.OS.Variant,
 		}
 	}
 

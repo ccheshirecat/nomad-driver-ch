@@ -160,7 +160,7 @@ client {
       cloud_hypervisor {
         bin = "/usr/bin/cloud-hypervisor"
         remote_bin = "/usr/bin/ch-remote"
-        virtiofsd_bin = "/usr/bin/virtiofsd"
+        virtiofsd_bin = "/usr/libexec/virtiofsd"
         default_kernel = "/boot/vmlinuz"
         default_initramfs = "/boot/initramfs.img"
       }
@@ -207,7 +207,7 @@ plugin "nomad-driver-ch" {
     cloud_hypervisor {
       bin = "/usr/bin/cloud-hypervisor"           # Cloud Hypervisor binary path
       remote_bin = "/usr/bin/ch-remote"           # ch-remote binary path
-      virtiofsd_bin = "/usr/bin/virtiofsd"        # virtiofsd binary path
+      virtiofsd_bin = "/usr/libexec/virtiofsd"        # virtiofsd binary path
       default_kernel = "/boot/vmlinuz"            # Default kernel for VMs
       default_initramfs = "/boot/initramfs.img"   # Default initramfs for VMs
       firmware = "/usr/share/qemu/OVMF.fd"        # UEFI firmware (optional)
@@ -249,7 +249,7 @@ plugin "nomad-driver-ch" {
 |-----------|------|---------|-------------|
 | `cloud_hypervisor.bin` | string | `/usr/bin/cloud-hypervisor` | Path to Cloud Hypervisor binary |
 | `cloud_hypervisor.remote_bin` | string | `/usr/bin/ch-remote` | Path to ch-remote binary |
-| `cloud_hypervisor.virtiofsd_bin` | string | `/usr/bin/virtiofsd` | Path to virtiofsd binary |
+| `cloud_hypervisor.virtiofsd_bin` | string | `/usr/libexec/virtiofsd` | Path to virtiofsd binary |
 | `cloud_hypervisor.default_kernel` | string | - | Default kernel path for VMs |
 | `cloud_hypervisor.default_initramfs` | string | - | Default initramfs path for VMs |
 | `cloud_hypervisor.firmware` | string | - | UEFI firmware path (optional) |
@@ -717,7 +717,7 @@ Configure health checks for VM services:
 
 ```hcl
 task "web-server" {
-  driver = "virt"
+ driver = "ch"
 
   config {
     image = "/var/lib/images/nginx.img"
