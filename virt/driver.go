@@ -662,11 +662,18 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 
 	// If cpuset is empty but CPU resources are specified, use CPU cores instead
 	if cpuCount == 0 && cfg.Resources.NomadResources.Cpu.CpuShares > 0 {
-		// Estimate CPU count from CPU shares (default is 1024 per CPU)
-		cpuCount = uint(cfg.Resources.NomadResources.Cpu.CpuShares / 1024)
+		// Calculate CPU count from CPU shares (default is 1024 per CPU)
+		// Use ceiling division to round up (e.g., 2000 shares = 2 CPUs)
+		cpuCount = uint((cfg.Resources.NomadResources.Cpu.CpuShares + 1023) / 1024)
 		if cpuCount == 0 {
 			cpuCount = 1 // Minimum of 1 CPU
 		}
+	}
+
+	// Final fallback: if no CPU configuration is provided, default to 1 CPU
+	if cpuCount == 0 {
+		cpuCount = 1
+		d.logger.Debug("no CPU configuration provided, defaulting to 1 CPU")
 	}
 
 	dc := &domain.Config{
