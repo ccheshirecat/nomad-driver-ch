@@ -72,6 +72,9 @@ type Driver struct {
 	// IP allocation state
 	allocatedIPs map[string]bool // IP -> allocated
 	ipCounter    int
+
+	// For testing - skip binary validation
+	skipBinaryValidation bool
 }
 
 // CloudInit interface for generating cloud-init ISOs
@@ -188,14 +191,20 @@ type VMInfo struct {
 
 // New creates a new Cloud Hypervisor driver
 func New(ctx context.Context, logger hclog.Logger, config *domain.CloudHypervisor, netConfig *domain.Network, dataDir string) *Driver {
+	return NewWithSkipValidation(ctx, logger, config, netConfig, dataDir, false)
+}
+
+// NewWithSkipValidation creates a new Cloud Hypervisor driver with optional binary validation skip
+func NewWithSkipValidation(ctx context.Context, logger hclog.Logger, config *domain.CloudHypervisor, netConfig *domain.Network, dataDir string, skipValidation bool) *Driver {
 	d := &Driver{
 		logger:        logger.Named("cloud-hypervisor"),
 		config:        config,
 		networkConfig: netConfig,
 		dataDir:       dataDir,
-		processes:     make(map[string]*VMProcess),
-		allocatedIPs:  make(map[string]bool),
-		ipCounter:     100, // Start from .100
+		processes:            make(map[string]*VMProcess),
+		allocatedIPs:         make(map[string]bool),
+		ipCounter:            100, // Start from .100
+		skipBinaryValidation: skipValidation,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -258,6 +267,11 @@ func (d *Driver) Start(dataDir string) error {
 
 // validateBinaries checks that required binaries are available
 func (d *Driver) validateBinaries() error {
+	// Skip validation for testing
+	if d.skipBinaryValidation {
+		return nil
+	}
+
 	binaries := map[string]string{
 		"cloud-hypervisor": d.config.Bin,
 		"ch-remote":        d.config.RemoteBin,

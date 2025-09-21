@@ -28,6 +28,14 @@ import (
 	"github.com/shoenig/test/must"
 )
 
+// getEnvOrDefault returns the value of an environment variable or a default value if not set
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 type mockNet struct{}
 
 func (mn *mockNet) Fingerprint(map[string]*plugins.Attribute) {
@@ -239,8 +247,8 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 			Bin:              "/usr/bin/cloud-hypervisor",
 			RemoteBin:        "/usr/bin/ch-remote",
 			VirtiofsdBin:     "/usr/libexec/virtiofsd",
-			DefaultKernel:    "/root/vmlinuz-virt",
-			DefaultInitramfs: "/root/initramfs-virt",
+			DefaultKernel:    getEnvOrDefault("KERNEL_PATH", "/root/vmlinux-normal"), // Use environment variable from CI or fallback
+			DefaultInitramfs: getEnvOrDefault("INITRD_PATH", "/root/raiin-fc.cpio.gz"), // Use environment variable from CI or fallback
 			Firmware:         "",
 			Seccomp:          "true",
 			LogFile:          "",
@@ -607,8 +615,13 @@ func (cim *cloudInitMock) Apply(ci *cloudinit.Config, path string) error {
 	return cim.err
 }
 
-func TestVirtDriver_Start_Wait_Destroy_LibvirtIntegration(t *testing.T) {
+func TestVirtDriver_Start_Wait_Destroy_Integration(t *testing.T) {
 	ci.Parallel(t)
+
+	// Skip integration test if Cloud Hypervisor binary is not available
+	if _, err := os.Stat("/usr/bin/cloud-hypervisor"); os.IsNotExist(err) {
+		t.Skip("Cloud Hypervisor binary not found, skipping integration test")
+	}
 
 	tempDir, err := os.MkdirTemp("", "exampledir-*")
 	must.NoError(t, err)
