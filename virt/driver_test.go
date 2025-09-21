@@ -236,7 +236,7 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 		DataDir: dataDir,
 		ImagePaths: []string{"/root", dataDir}, // Allow images from /root and test temp dir
 		Network: domain.Network{
-			Bridge:      "br0",
+			Bridge:      getEnvOrDefault("BRIDGE", "br0"),
 			SubnetCIDR:  "192.168.1.0/24",
 			Gateway:     "192.168.1.1",
 			IPPoolStart: "192.168.1.100",
@@ -244,7 +244,7 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 			TAPPrefix:   "tap",
 		},
 		CloudHypervisor: domain.CloudHypervisor{
-			Bin:              "/usr/bin/cloud-hypervisor",
+			Bin:              getEnvOrDefault("CH_BIN", "/usr/bin/cloud-hypervisor"),
 			RemoteBin:        "/usr/bin/ch-remote",
 			VirtiofsdBin:     "/usr/libexec/virtiofsd",
 			DefaultKernel:    getEnvOrDefault("KERNEL_PATH", "/root/vmlinux-normal"), // Use environment variable from CI or fallback
@@ -277,8 +277,20 @@ func virtDriverHarness(t *testing.T, v Virtualizer, dg DomainGetter, ih ImageHan
 
 // createUniqueRootfsImage creates a unique disk image file for each test to avoid locking conflicts
 func createUniqueRootfsImage(t *testing.T, tempDir string) string {
-	// Try to use actual rootfs image if available
-	sourceImage := "/root/alpine-rootfs.img"
+	// Try to use actual rootfs image if available (try multiple possible paths)
+	possiblePaths := []string{
+		getEnvOrDefault("ROOTFS_PATH", "/root/rootfs.img"),
+		"/root/alpine-rootfs.img",
+		"/root/rootfs.img",
+	}
+
+	var sourceImage string
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(path); err == nil {
+			sourceImage = path
+			break
+		}
+	}
 
 	// Create unique image file for this test
 	uniqueImage, err := os.CreateTemp(tempDir, "test-rootfs-*.img")
@@ -286,11 +298,17 @@ func createUniqueRootfsImage(t *testing.T, tempDir string) string {
 	defer uniqueImage.Close()
 
 	// If source image exists, copy it; otherwise create a minimal file
-	if sourceData, err := os.ReadFile(sourceImage); err == nil {
-		_, err = uniqueImage.Write(sourceData)
-		must.NoError(t, err)
+	if sourceImage != "" {
+		if sourceData, err := os.ReadFile(sourceImage); err == nil {
+			_, err = uniqueImage.Write(sourceData)
+			must.NoError(t, err)
+		} else {
+			// Create minimal test file if source not available
+			_, err = uniqueImage.WriteString("test image content")
+			must.NoError(t, err)
+		}
 	} else {
-		// Create minimal test file if source not available
+		// No source image found, create minimal test file
 		_, err = uniqueImage.WriteString("test image content")
 		must.NoError(t, err)
 	}
@@ -623,6 +641,27 @@ func TestVirtDriver_Start_Wait_Destroy_Integration(t *testing.T) {
 		t.Skip("Cloud Hypervisor binary not found, skipping integration test")
 	}
 
+	// Skip integration test if required test artifacts are not available
+	kernelPath := getEnvOrDefault("KERNEL_PATH", "/root/vmlinux-normal")
+	initrdPath := getEnvOrDefault("INITRD_PATH", "/root/raiin-fc.cpio.gz")
+	rootfsPath := getEnvOrDefault("ROOTFS_PATH", "/root/rootfs.img")
+
+	if _, err := os.Stat(kernelPath); os.IsNotExist(err) {
+		t.Skipf("Kernel file not found at %s, skipping integration test", kernelPath)
+	}
+	if _, err := os.Stat(initrdPath); os.IsNotExist(err) {
+		t.Skipf("Initrd file not found at %s, skipping integration test", initrdPath)
+	}
+	if _, err := os.Stat(rootfsPath); os.IsNotExist(err) {
+		t.Skipf("Rootfs file not found at %s, skipping integration test", rootfsPath)
+	}
+
+	// Check if bridge exists (for networking tests)
+	bridgeName := getEnvOrDefault("BRIDGE", "br0")
+	if _, err := os.Stat("/sys/class/net/" + bridgeName); os.IsNotExist(err) {
+		t.Skipf("Bridge interface %s not found, skipping integration test", bridgeName)
+	}
+
 	tempDir, err := os.MkdirTemp("", "exampledir-*")
 	must.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -668,8 +707,17 @@ func TestVirtDriver_Start_Wait_Destroy_Integration(t *testing.T) {
 
 	must.One(t, dth.Version)
 
+	t.Logf("Integration test: task started successfully, checking status")
+
 	// For integration test, just verify that the task is running
 	// Real Cloud Hypervisor doesn't maintain a global domain list like libvirt
+
+	// Check task status immediately
+	ts, err := d.InspectTask(task.ID)
+	if err != nil {
+		t.Fatalf("Integration test: failed to inspect task: %v", err)
+	}
+	t.Logf("Integration test: task status: %s", ts.State)
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -692,20 +740,25 @@ func TestVirtDriver_Start_Wait_Destroy_Integration(t *testing.T) {
 		}
 	}(t)
 
+	t.Logf("Integration test: waiting for task to be ready")
 	select {
 	case <-waitCh:
 		t.Fatalf("wait channel should not have received an exit result")
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):  // Increased timeout for CI environment
+		t.Logf("Integration test: task still running after 30 seconds, checking final status")
 	}
 
-	ts, err := d.InspectTask(task.ID)
-	must.NoError(t, err)
-	must.Eq(t, drivers.TaskStateRunning, ts.State)
-	must.StrContains(t, task.ID, ts.ID)
+	finalTs, err := d.InspectTask(task.ID)
+	if err != nil {
+		t.Fatalf("Integration test: failed to inspect task: %v", err)
+	}
+	t.Logf("Integration test: final task status: %s", finalTs.State)
+	must.Eq(t, drivers.TaskStateRunning, finalTs.State)
+	must.StrContains(t, task.ID, finalTs.ID)
 
 	cancel()
 	err = d.DestroyTask(task.ID, true)
 	must.NoError(t, err)
 
-	// Integration test complete - real Cloud Hypervisor driver tested
+	t.Logf("Integration test complete - real Cloud Hypervisor driver tested")
 }

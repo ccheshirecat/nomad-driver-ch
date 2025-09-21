@@ -254,3 +254,40 @@ type Config struct {
 	// ImagePaths is an allow-list of paths cloud hypervisor is allowed to load an image from
 	ImagePaths []string `codec:"image_paths"`
 }
+
+// initDefaults initializes the config with default values
+func (c *Config) initDefaults() {
+	// Initialize network defaults if empty
+	if c.Network.Bridge == "" {
+		c.Network.Bridge = "br0"
+	}
+	if c.Network.SubnetCIDR == "" {
+		c.Network.SubnetCIDR = "192.168.1.0/24"
+	}
+	if c.Network.Gateway == "" {
+		c.Network.Gateway = "192.168.1.1"
+	}
+	if c.Network.IPPoolStart == "" {
+		c.Network.IPPoolStart = "192.168.1.100"
+	}
+	if c.Network.IPPoolEnd == "" {
+		c.Network.IPPoolEnd = "192.168.1.200"
+	}
+	if c.Network.TAPPrefix == "" {
+		c.Network.TAPPrefix = "tap"
+	}
+
+	// Initialize Cloud Hypervisor defaults if empty
+	if c.CloudHypervisor.Bin == "" {
+		c.CloudHypervisor.Bin = "/usr/bin/cloud-hypervisor"
+	}
+	if c.CloudHypervisor.RemoteBin == "" {
+		c.CloudHypervisor.RemoteBin = "/usr/bin/ch-remote"
+	}
+	if c.CloudHypervisor.VirtiofsdBin == "" {
+		c.CloudHypervisor.VirtiofsdBin = "/usr/libexec/virtiofsd"
+	}
+	if c.CloudHypervisor.Seccomp == "" {
+		c.CloudHypervisor.Seccomp = "false"
+	}
+}

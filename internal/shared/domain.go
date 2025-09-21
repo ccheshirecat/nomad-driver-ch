@@ -29,7 +29,7 @@ var (
 
 	ErrEmptyName           = errors.New("domain name can not be empty")
 	ErrMissingImage        = errors.New("image path can not be empty")
-	ErrNoCPUS              = errors.New("no cpus configured, use resources.cores to assign cores in the job spec")
+	ErrNoCPUS              = errors.New("no cpus configured, use cpuset_cpus in the client configuration to assign cores")
 	ErrNotEnoughMemory     = errors.New("not enough memory assigned to task")
 	ErrIncompleteOSVariant = errors.New("provided os information is incomplete: arch and machine are mandatory ")
 	ErrInvalidHostName     = fmt.Errorf("a resource name must consist of lower case alphanumeric characters or '-', must start and end with an alphanumeric character and be less than %d characters", maxNameLength+1)

@@ -200,6 +200,9 @@ func (d *VirtDriverPlugin) SetConfig(cfg *base.Config) error {
 	// Save the configuration to the plugin
 	d.config = &config
 
+	// Initialize defaults if they weren't set in the plugin config
+	d.config.initDefaults()
+
 	// Save the Nomad agent configuration
 	if cfg.AgentConfig != nil {
 		d.nomadConfig = cfg.AgentConfig.Driver
@@ -655,12 +658,22 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 	}
 
 	cpuSet := idset.Parse[hw.CoreID](cfg.Resources.LinuxResources.CpusetCpus)
+	cpuCount := uint(cpuSet.Size())
+
+	// If cpuset is empty but CPU resources are specified, use CPU cores instead
+	if cpuCount == 0 && cfg.Resources.NomadResources.Cpu.CpuShares > 0 {
+		// Estimate CPU count from CPU shares (default is 1024 per CPU)
+		cpuCount = uint(cfg.Resources.NomadResources.Cpu.CpuShares / 1024)
+		if cpuCount == 0 {
+			cpuCount = 1 // Minimum of 1 CPU
+		}
+	}
 
 	dc := &domain.Config{
 		RemoveConfigFiles: true,
 		Name:              taskName,
 		Memory:            uint(cfg.Resources.NomadResources.Memory.MemoryMB),
-		CPUs:              uint(cpuSet.Size()),
+		CPUs:              cpuCount,
 		CPUset:            cfg.Resources.LinuxResources.CpusetCpus,
 		OsVariant:         osVariant,
 		BaseImage:         diskImagePath,
