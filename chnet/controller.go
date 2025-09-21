@@ -493,7 +493,7 @@ func (c *Controller) VMTerminatedTeardown(req *net.VMTerminatedTeardownRequest) 
 	if err != nil {
 		// In environments without iptables, skip network teardown
 		// This is not ideal but allows the system to continue
-		c.logger.Warn("iptables not available, skipping network teardown", "error", err, "vm", req.DomainName)
+		c.logger.Warn("iptables not available, skipping network teardown", "error", err)
 		return &net.VMTerminatedTeardownResponse{}, nil
 	}
 
