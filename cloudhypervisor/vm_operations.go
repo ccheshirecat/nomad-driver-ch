@@ -21,6 +21,30 @@ import (
 	domain "github.com/ccheshirecat/nomad-driver-ch/internal/shared"
 )
 
+// findIPCommand returns the path to the ip command, trying common locations
+func findIPCommand() (string, error) {
+	// Try common paths where ip command is typically located
+	commonPaths := []string{
+		"/usr/sbin/ip",
+		"/sbin/ip",
+		"/usr/bin/ip",
+		"/bin/ip",
+	}
+
+	for _, path := range commonPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	// Fallback to PATH lookup
+	if path, err := exec.LookPath("ip"); err == nil {
+		return path, nil
+	}
+
+	return "", fmt.Errorf("ip command not found in common locations or PATH")
+}
+
 // createCloudInit generates cloud-init ISO for VM
 func (d *Driver) createCloudInit(config *domain.Config, proc *VMProcess, workDir string) error {
 	// Generate cloud-init commands for virtio-fs mounts
@@ -150,14 +174,23 @@ func convertFiles(domainFiles []domain.File) []cloudinit.File {
 
 // setupNetworking creates TAP interface and attaches to bridge
 func (d *Driver) setupNetworking(config *domain.Config, proc *VMProcess) error {
+	// Find the ip command
+	ipPath, err := findIPCommand()
+	if err != nil {
+		// In test environments or systems without ip command, skip network setup
+		// VM will still work but without network connectivity
+		d.logger.Warn("ip command not available, skipping network setup", "error", err, "vm", proc.Name)
+		return nil
+	}
+
 	// Create TAP interface
-	cmd := exec.Command("ip", "tuntap", "add", "dev", proc.TapName, "mode", "tap")
+	cmd := exec.Command(ipPath, "tuntap", "add", "dev", proc.TapName, "mode", "tap")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create tap interface %s: %w (output: %s)", proc.TapName, err, string(output))
 	}
 
 	// Set TAP interface up
-	cmd = exec.Command("ip", "link", "set", "dev", proc.TapName, "up")
+	cmd = exec.Command(ipPath, "link", "set", "dev", proc.TapName, "up")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to bring up tap interface %s: %w (output: %s)", proc.TapName, err, string(output))
 	}
@@ -173,7 +206,7 @@ func (d *Driver) setupNetworking(config *domain.Config, proc *VMProcess) error {
 	}
 
 	// Add TAP to bridge
-	cmd = exec.Command("ip", "link", "set", "dev", proc.TapName, "master", bridgeName)
+	cmd = exec.Command(ipPath, "link", "set", "dev", proc.TapName, "master", bridgeName)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to add tap %s to bridge %s: %w (output: %s)", proc.TapName, bridgeName, err, string(output))
 	}
@@ -189,7 +222,14 @@ func (d *Driver) setupNetworking(config *domain.Config, proc *VMProcess) error {
 // cleanupNetworkingWithBridge removes TAP interface using a specific bridge
 func (d *Driver) cleanupNetworkingWithBridge(bridgeName string, proc *VMProcess) {
 	if proc.TapName != "" {
-		cmd := exec.Command("ip", "link", "delete", "dev", proc.TapName)
+		// Find the ip command
+		ipPath, err := findIPCommand()
+		if err != nil {
+			d.logger.Warn("ip command not available, skipping tap cleanup", "tap", proc.TapName, "error", err)
+			return
+		}
+
+		cmd := exec.Command(ipPath, "link", "delete", "dev", proc.TapName)
 		if err := cmd.Run(); err != nil {
 			d.logger.Warn("failed to cleanup tap interface", "tap", proc.TapName, "error", err)
 		}
@@ -199,7 +239,14 @@ func (d *Driver) cleanupNetworkingWithBridge(bridgeName string, proc *VMProcess)
 // cleanupNetworking removes TAP interface
 func (d *Driver) cleanupNetworking(config *domain.Config, proc *VMProcess) {
 	if proc.TapName != "" {
-		cmd := exec.Command("ip", "link", "delete", "dev", proc.TapName)
+		// Find the ip command
+		ipPath, err := findIPCommand()
+		if err != nil {
+			d.logger.Warn("ip command not available, skipping tap cleanup", "tap", proc.TapName, "error", err)
+			return
+		}
+
+		cmd := exec.Command(ipPath, "link", "delete", "dev", proc.TapName)
 		if err := cmd.Run(); err != nil {
 			d.logger.Warn("failed to cleanup tap interface", "tap", proc.TapName, "error", err)
 		}

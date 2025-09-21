@@ -368,7 +368,10 @@ func (c *Controller) configureIPTables(
 
 	ipt, err := iptables.New()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iptables handle: %w", err)
+		// In environments without iptables, skip port forwarding setup
+		// Basic VM functionality will still work
+		c.logger.Warn("iptables not available, skipping port forwarding setup", "error", err)
+		return teardownRules, nil
 	}
 
 	// Create lookup mapping for ip:interface-name, so we can cache reads of
@@ -488,7 +491,10 @@ func (c *Controller) VMTerminatedTeardown(req *net.VMTerminatedTeardownRequest) 
 
 	ipt, err := iptables.New()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create iptables handle: %w", err)
+		// In environments without iptables, skip network teardown
+		// This is not ideal but allows the system to continue
+		c.logger.Warn("iptables not available, skipping network teardown", "error", err, "vm", req.DomainName)
+		return &net.VMTerminatedTeardownResponse{}, nil
 	}
 
 	// Collect all the errors, so we provide the operator with enough

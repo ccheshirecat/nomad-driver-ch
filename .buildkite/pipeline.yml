@@ -2,7 +2,7 @@ steps:
   - label: "🏗️ Build & Unit Tests"
     command: |
       set -euxo pipefail
-      export PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
+      export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
 
       echo "--- Go environment"
       go version
@@ -22,7 +22,7 @@ steps:
   - label: "🔬 Cloud Hypervisor Integration Test"
     command: |
       set -euxo pipefail
-      export PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
+      export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
 
       echo "--- Verify Cloud Hypervisor binary"
       cloud-hypervisor --version
@@ -49,7 +49,7 @@ steps:
   - label: "🚀 Release"
     command: |
       set -euxo pipefail
-      export PATH="/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
+      export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/root/.local/bin:/root/.cargo/bin:/root/go/bin:/usr/local/go/bin:$PATH"
 
       # Fetch tags first since Buildkite doesn't by default
       git fetch --tags origin
