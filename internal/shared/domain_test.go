@@ -24,14 +24,16 @@ func TestConfig_Validate(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		config  Config
-		wantErr error
+		name         string
+		config       Config
+		allowedPaths []string
+		wantErr      error
 	}{
 		{
-			name:    "Valid_configuration",
-			config:  validConfig,
-			wantErr: nil,
+			name:         "Valid_configuration",
+			config:       validConfig,
+			allowedPaths: []string{allowedPath},
+			wantErr:      nil,
 		},
 		{
 			name: "Image_path_not_alloweds",
@@ -42,7 +44,32 @@ func TestConfig_Validate(t *testing.T) {
 				BaseImage:       "/path/not/allowed/image.qcow2",
 				OsVariant:       validConfig.OsVariant,
 			},
-			wantErr: multierror.Append(nil, ErrPathNotAllowed),
+			allowedPaths: []string{allowedPath},
+			wantErr:      multierror.Append(nil, ErrPathNotAllowed),
+		},
+		{
+			name: "User_specific_paths",
+			config: Config{
+				Name:            "test",
+				BaseImage:       "/root/my-image.qcow2",
+				OsVariant:       validConfig.OsVariant,
+				Memory:          validConfig.Memory,
+				CPUs:            validConfig.CPUs,
+			},
+			allowedPaths: []string{"/root", "/var/lib/viper"},
+			wantErr:      nil, // Should be allowed
+		},
+		{
+			name: "User_specific_paths_not_allowed",
+			config: Config{
+				Name:            "test",
+				BaseImage:       "/opt/my-image.qcow2", // Not in allowed paths
+				OsVariant:       validConfig.OsVariant,
+				Memory:          validConfig.Memory,
+				CPUs:            validConfig.CPUs,
+			},
+			allowedPaths: []string{"/root", "/var/lib/viper"},
+			wantErr:      multierror.Append(nil, ErrPathNotAllowed),
 		},
 		{
 			name: "Missing_domain_name",
@@ -52,7 +79,8 @@ func TestConfig_Validate(t *testing.T) {
 				BaseImage:       validConfig.BaseImage,
 				OsVariant:       validConfig.OsVariant,
 			},
-			wantErr: multierror.Append(nil, ErrEmptyName),
+			allowedPaths: []string{allowedPath},
+			wantErr:      multierror.Append(nil, ErrEmptyName),
 		},
 		{
 			name: "Missing_base_image",
@@ -62,7 +90,8 @@ func TestConfig_Validate(t *testing.T) {
 				CPUs:            validConfig.CPUs,
 				OsVariant:       validConfig.OsVariant,
 			},
-			wantErr: multierror.Append(nil, ErrMissingImage),
+			allowedPaths: []string{allowedPath},
+			wantErr:      multierror.Append(nil, ErrMissingImage),
 		},
 		{
 			name: "Not_enough_memory",
@@ -73,7 +102,8 @@ func TestConfig_Validate(t *testing.T) {
 				BaseImage:       validConfig.BaseImage,
 				OsVariant:       validConfig.OsVariant,
 			},
-			wantErr: multierror.Append(nil, ErrNotEnoughMemory),
+			allowedPaths: []string{allowedPath},
+			wantErr:      multierror.Append(nil, ErrNotEnoughMemory),
 		},
 		{
 			name: "No_cpus_assigned",
@@ -84,7 +114,8 @@ func TestConfig_Validate(t *testing.T) {
 				BaseImage:       validConfig.BaseImage,
 				OsVariant:       validConfig.OsVariant,
 			},
-			wantErr: multierror.Append(nil, ErrNoCPUS),
+			allowedPaths: []string{allowedPath},
+			wantErr:      multierror.Append(nil, ErrNoCPUS),
 		},
 		{
 			name: "Incomplete_OS_variant",
@@ -98,7 +129,8 @@ func TestConfig_Validate(t *testing.T) {
 					Machine: "",
 				},
 			},
-			wantErr: multierror.Append(nil, ErrIncompleteOSVariant),
+			allowedPaths: []string{allowedPath},
+			wantErr:      multierror.Append(nil, ErrIncompleteOSVariant),
 		},
 		{
 			name: "All_errors",
@@ -108,7 +140,8 @@ func TestConfig_Validate(t *testing.T) {
 					Machine: "",
 				},
 			},
-			wantErr: multierror.Append(nil, ErrEmptyName, ErrMissingImage,
+			allowedPaths: []string{allowedPath},
+			wantErr:      multierror.Append(nil, ErrEmptyName, ErrMissingImage,
 				ErrNotEnoughMemory, ErrIncompleteOSVariant,
 				ErrNoCPUS),
 		},
@@ -117,7 +150,7 @@ func TestConfig_Validate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			err := tt.config.Validate([]string{allowedPath})
+			err := tt.config.Validate(tt.allowedPaths)
 			if err != nil && tt.wantErr == nil {
 				t.Errorf("expected no error, got %v", err)
 			} else if err == nil && tt.wantErr != nil {

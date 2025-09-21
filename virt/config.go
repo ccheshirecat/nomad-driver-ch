@@ -277,6 +277,11 @@ func (c *Config) initDefaults() {
 		c.Network.TAPPrefix = "tap"
 	}
 
+	// Initialize ImagePaths with common defaults if empty
+	if len(c.ImagePaths) == 0 {
+		c.ImagePaths = []string{"/var/lib/nomad", "/tmp", "/root", "/opt", "/var/lib"}
+	}
+
 	// Initialize Cloud Hypervisor defaults if empty
 	if c.CloudHypervisor.Bin == "" {
 		c.CloudHypervisor.Bin = "/usr/bin/cloud-hypervisor"

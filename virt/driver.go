@@ -624,6 +624,8 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 	// paths to load images from.
 	allowedPaths := append(d.config.ImagePaths, d.dataDir, cfg.AllocDir)
 
+	d.logger.Debug("checking image path", "image_path", driverConfig.ImagePath, "allowed_paths", allowedPaths, "config_image_paths", d.config.ImagePaths, "data_dir", d.dataDir, "alloc_dir", cfg.AllocDir)
+
 	diskImagePath := driverConfig.ImagePath
 
 	if !fileExists(diskImagePath) {
@@ -700,6 +702,9 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		Initramfs:         driverConfig.Initramfs,
 		Cmdline:           driverConfig.Cmdline,
 	}
+
+	// Debug logging for path validation
+	d.logger.Debug("validating image path", "image_path", dc.BaseImage, "allowed_paths", allowedPaths)
 
 	if err := dc.Validate(allowedPaths); err != nil {
 		return nil, nil, fmt.Errorf("virt: invalid configuration %s: %w", cfg.AllocID, err)

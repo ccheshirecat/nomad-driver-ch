@@ -222,6 +222,13 @@ func isAllowedImagePath(allowedPaths []string, imagePath string) bool {
 		}
 	}
 
+	// Debug logging - this will help identify path validation issues
+	fmt.Printf("DEBUG: Image path '%s' not allowed. Allowed paths: %v\n", imagePath, allowedPaths)
+	for _, ap := range allowedPaths {
+		rel, err := filepath.Rel(ap, imagePath)
+		fmt.Printf("DEBUG: Checking if '%s' is parent of '%s' (rel: '%s', err: %v)\n", ap, imagePath, rel, err)
+	}
+
 	return false
 }
 

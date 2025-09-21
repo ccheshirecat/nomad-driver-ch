@@ -78,7 +78,9 @@ plugin "nomad-driver-virt" {
     image_paths = [
       "/var/lib/images",
       "/opt/vm-images",
-      "/tmp/nomad-images"
+      "/tmp/nomad-images",
+      "/root",           # Add your path
+      "/var/lib/viper"   # Add your path
     ]
   }
 }
