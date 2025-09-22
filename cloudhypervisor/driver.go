@@ -289,6 +289,47 @@ func (d *Driver) initializeNetworkConfig() {
 
 }
 
+func (d *Driver) ensureBridgeConfigured() error {
+	ipPath, err := findIPCommand()
+	if err != nil {
+		return err
+	}
+
+	bridge := d.networkConfig.Bridge
+	if bridge == "" {
+		return fmt.Errorf("bridge name not provided")
+	}
+
+	if err := exec.Command(ipPath, "link", "show", bridge).Run(); err != nil {
+		d.logger.Info("bridge not found, creating", "bridge", bridge)
+		if output, createErr := exec.Command(ipPath, "link", "add", "name", bridge, "type", "bridge").CombinedOutput(); createErr != nil {
+			if !strings.Contains(strings.ToLower(string(output)), "file exists") {
+				return fmt.Errorf("unable to create bridge %s: %w (output: %s)", bridge, createErr, strings.TrimSpace(string(output)))
+			}
+		}
+	}
+
+	addrOutput, addrErr := exec.Command(ipPath, "addr", "show", bridge).CombinedOutput()
+	if addrErr != nil {
+		return fmt.Errorf("unable to read bridge addresses: %w (output: %s)", addrErr, strings.TrimSpace(string(addrOutput)))
+	}
+
+	if !strings.Contains(string(addrOutput), d.gatewayIP.String()) {
+		cidr := fmt.Sprintf("%s/%d", d.gatewayIP.String(), d.subnet.Bits())
+		if output, addErr := exec.Command(ipPath, "addr", "add", cidr, "dev", bridge).CombinedOutput(); addErr != nil {
+			if !strings.Contains(strings.ToLower(string(output)), "file exists") {
+				return fmt.Errorf("unable to assign %s to %s: %w (output: %s)", cidr, bridge, addErr, strings.TrimSpace(string(output)))
+			}
+		}
+	}
+
+	if output, upErr := exec.Command(ipPath, "link", "set", bridge, "up").CombinedOutput(); upErr != nil {
+		return fmt.Errorf("unable to bring bridge %s up: %w (output: %s)", bridge, upErr, strings.TrimSpace(string(output)))
+	}
+
+	return nil
+}
+
 func (d *Driver) validateNetworkConfig() error {
 	if d.networkConfig == nil {
 		return fmt.Errorf("network configuration is not set")
@@ -360,6 +401,10 @@ func (d *Driver) Start(dataDir string) error {
 
 	if err := d.validateNetworkConfig(); err != nil {
 		return fmt.Errorf("invalid network configuration: %w", err)
+	}
+
+	if err := d.ensureBridgeConfigured(); err != nil {
+		return fmt.Errorf("failed to configure bridge %s: %w", d.networkConfig.Bridge, err)
 	}
 
 	// Ensure data directory exists
