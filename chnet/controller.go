@@ -285,12 +285,13 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 		c.logger.Debug("generated deterministic MAC for DHCP", "mac", mac, "vm", req.DomainName)
 
 		// Viper uses static IP allocation, not DHCP. Skip DHCP lease lookup and use GuestIPs directly.
-	if len(req.GuestIPs) > 0 && req.GuestIPs[0] != "" {
-		ipAddr = req.GuestIPs[0]
-		c.logger.Info("using IP from virtualizer (static allocation)", "ip", ipAddr, "vm", req.DomainName)
-	} else {
-		c.logger.Error("no IP address provided by virtualizer", "vm", req.DomainName)
-		return nil, fmt.Errorf("virtualizer did not provide IP address for VM %s", req.DomainName)
+		if len(req.GuestIPs) > 0 && req.GuestIPs[0] != "" {
+			ipAddr = req.GuestIPs[0]
+			c.logger.Info("using IP from virtualizer (static allocation)", "ip", ipAddr, "vm", req.DomainName)
+		} else {
+			c.logger.Error("no IP address provided by virtualizer", "vm", req.DomainName)
+			return nil, fmt.Errorf("virtualizer did not provide IP address for VM %s", req.DomainName)
+		}
 	}
 
 	// Configure iptables rules for port forwarding
@@ -311,7 +312,6 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 		},
 	}, nil
 }
-
 
 // configureIPTables is responsible for adding the iptables entries to enable
 // port mapping. The function will perform this action for all configured ports
