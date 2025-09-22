@@ -320,8 +320,7 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 // The returned array contains the added rules which helps make it easier to
 // delete rules when a task is stopped, specifically by avoiding having to
 // generate the information again.
-func (c *Controller) configureIPTables(
-	res *drivers.Resources, cfg *net.NetworkInterfaceBridgeConfig, ip string) ([][]string, error) {
+func (c *Controller) configureIPTables(res *drivers.Resources, cfg *net.NetworkInterfaceBridgeConfig, ip string) ([][]string, error) {
 
 	var teardownRules [][]string
 
