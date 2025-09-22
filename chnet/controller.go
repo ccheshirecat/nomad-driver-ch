@@ -312,58 +312,6 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 	}, nil
 }
 
-// extractVMStaticIP extracts or determines the static IP for a VM
-// This method should be coordinated with the CH driver's IP allocation
-func (c *Controller) extractVMStaticIP(domainName string, hwaddrs []string) (string, error) {
-	// Check if hwaddrs contains IP information (from Cloud Hypervisor driver)
-	if len(hwaddrs) > 0 {
-		for _, addr := range hwaddrs {
-			if stdnet.ParseIP(addr) != nil {
-				c.logger.Debug("using IP from Cloud Hypervisor driver", "ip", addr, "vm", domainName)
-				return addr, nil
-			}
-		}
-	}
-
-	// Fallback: generate deterministic IP based on the configured pool.
-	start, errStart := netip.ParseAddr(c.networkConfig.IPPoolStart)
-	end, errEnd := netip.ParseAddr(c.networkConfig.IPPoolEnd)
-	if errStart == nil && errEnd == nil && start.Is4() && end.Is4() {
-		startVal := ipv4ToUint32(start)
-		endVal := ipv4ToUint32(end)
-		if endVal < startVal {
-			startVal, endVal = endVal, startVal
-		}
-
-		rangeSize := endVal - startVal + 1
-		if rangeSize > 0 {
-			hash := uint32(0)
-			for _, r := range domainName {
-				hash = hash*31 + uint32(r)
-			}
-
-			candidate := startVal + (hash % rangeSize)
-
-			if gw := c.networkConfig.Gateway; gw != "" {
-				if gatewayAddr, err := netip.ParseAddr(gw); err == nil && gatewayAddr.Is4() {
-					gatewayVal := ipv4ToUint32(gatewayAddr)
-					if candidate == gatewayVal {
-						candidate = startVal + ((candidate - startVal + 1) % rangeSize)
-					}
-				}
-			}
-
-			addr := uint32ToIPv4(candidate)
-			if addr.IsValid() {
-				ip := addr.String()
-				c.logger.Debug("generated fallback IP for VM", "ip", ip, "vm", domainName)
-				return ip, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("unable to derive fallback IP for %s", domainName)
-}
 
 // configureIPTables is responsible for adding the iptables entries to enable
 // port mapping. The function will perform this action for all configured ports
