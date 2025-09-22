@@ -266,6 +266,11 @@ func (d *Driver) initializeNetworkConfig() {
 		}
 	}
 
+	// If gateway or subnet are still unset, try to infer them from the bridge itself.
+	if (!d.gatewayIP.IsValid() || !d.subnet.IsValid()) && d.networkConfig.Bridge != "" {
+		d.detectBridgeNetwork()
+	}
+
 	if d.subnet.IsValid() {
 		// Ensure the gateway defaults to the first usable address if not explicitly set.
 		if !d.gatewayIP.IsValid() {
@@ -291,6 +296,50 @@ func (d *Driver) initializeNetworkConfig() {
 	if d.ipPoolStart.IsValid() && d.ipPoolEnd.IsValid() && d.ipPoolEnd.Compare(d.ipPoolStart) < 0 {
 		d.logger.Warn("IP pool end precedes start; swapping values", "start", d.ipPoolStart.String(), "end", d.ipPoolEnd.String())
 		d.ipPoolStart, d.ipPoolEnd = d.ipPoolEnd, d.ipPoolStart
+	}
+}
+
+// detectBridgeNetwork inspects the configured bridge to infer a gateway IP and
+// subnet when they were not provided explicitly in the plugin configuration.
+func (d *Driver) detectBridgeNetwork() {
+	iface, err := net.InterfaceByName(d.networkConfig.Bridge)
+	if err != nil {
+		d.logger.Debug("unable to inspect bridge for network defaults", "bridge", d.networkConfig.Bridge, "error", err)
+		return
+	}
+
+	addrs, err := iface.Addrs()
+	if err != nil {
+		d.logger.Debug("unable to read bridge addresses", "bridge", d.networkConfig.Bridge, "error", err)
+		return
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip4 := ipNet.IP.To4()
+		if ip4 == nil {
+			continue
+		}
+
+		if !d.gatewayIP.IsValid() {
+			if gateway, ok := netip.AddrFromSlice(ip4); ok {
+				d.gatewayIP = gateway
+			}
+		}
+
+		if !d.subnet.IsValid() {
+			if prefixBits, totalBits := ipNet.Mask.Size(); prefixBits > 0 && totalBits == 32 {
+				if base, ok := netip.AddrFromSlice(ip4); ok {
+					d.subnet = netip.PrefixFrom(base, prefixBits).Masked()
+				}
+			}
+		}
+
+		// We've populated the fields we care about, no need to inspect additional addresses.
+		return
 	}
 }
 
