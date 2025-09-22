@@ -284,15 +284,13 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 		mac := c.generateDeterministicMAC(req.DomainName)
 		c.logger.Debug("generated deterministic MAC for DHCP", "mac", mac, "vm", req.DomainName)
 
-		var err error
-		ipAddr, err = c.lookupDHCPLeaseByMAC(mac)
-		if err != nil {
-			c.logger.Error("failed to lookup DHCP lease", "error", err, "vm", req.DomainName)
-			c.logger.Error("DHCP lease lookup failed - this should not happen with static IP allocation", "vm", req.DomainName)
-			return nil, fmt.Errorf("DHCP lease lookup failed for VM %s: %w - check network configuration", req.DomainName, err)
-		}
-
-		c.logger.Info("found DHCP-assigned IP from lease file", "ip", ipAddr, "vm", req.DomainName)
+		// Viper uses static IP allocation, not DHCP. Skip DHCP lease lookup and use GuestIPs directly.
+	if len(req.GuestIPs) > 0 && req.GuestIPs[0] != "" {
+		ipAddr = req.GuestIPs[0]
+		c.logger.Info("using IP from virtualizer (static allocation)", "ip", ipAddr, "vm", req.DomainName)
+	} else {
+		c.logger.Error("no IP address provided by virtualizer", "vm", req.DomainName)
+		return nil, fmt.Errorf("virtualizer did not provide IP address for VM %s", req.DomainName)
 	}
 
 	// Configure iptables rules for port forwarding
