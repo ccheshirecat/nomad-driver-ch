@@ -21,7 +21,7 @@ func Test_capabilities(t *testing.T) {
 		Exec:                 false,
 		DisableLogCollection: true,
 		FSIsolation:          fsisolation.Image,
-		NetIsolationModes:    []drivers.NetIsolationMode{drivers.NetIsolationModeHost},
+		NetIsolationModes:    []drivers.NetIsolationMode{drivers.NetIsolationModeHost, drivers.NetIsolationModeGroup},
 		MustInitiateNetwork:  false,
 		MountConfigs:         drivers.MountConfigSupportNone,
 	}
@@ -132,7 +132,7 @@ config {
 }
 `,
 			expectedOutput: TaskConfig{
-				ImagePath:       "/path/to/image/here",
+				ImagePath: "/path/to/image/here",
 				OS: &OS{
 					Arch:    "x86_64",
 					Machine: "pc-i440fx-jammy",

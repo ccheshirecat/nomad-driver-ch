@@ -292,6 +292,10 @@ func (d *Driver) initializeNetworkConfig() {
 func (d *Driver) ensureBridgeConfigured() error {
 	ipPath, err := findIPCommand()
 	if err != nil {
+		// When running in test environments we may not have ip; skip silently.
+		if d.skipBinaryValidation {
+			return nil
+		}
 		return err
 	}
 
