@@ -322,6 +322,7 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 // generate the information again.
 func (c *Controller) configureIPTables(res *drivers.Resources, cfg *net.NetworkInterfaceBridgeConfig, ip string) ([][]string, error) {
 
+	// Initialize teardown rules slice
 	var teardownRules [][]string
 
 	ipt, err := iptables.New()
