@@ -12,6 +12,7 @@ import (
 	stdnet "net"
 	"net/netip"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -254,24 +255,16 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 	if bridgeName != "" {
 		c.logger.Debug("checking if bridge exists", "bridge", bridgeName, "domain", req.DomainName)
 		if !c.bridgeExists(bridgeName) {
-			c.logger.Warn("bridge not found", "bridge", bridgeName, "domain", req.DomainName)
-			c.logger.Info("ensure the bridge interface exists", "bridge", bridgeName, "domain", req.DomainName)
-			c.logger.Info("you can create it with: sudo ip link add name", "bridge", bridgeName, "type", "bridge")
-			return &net.VMStartedBuildResponse{
-				DriverNetwork: &drivers.DriverNetwork{
-					IP: "", // No network available
-				},
-				TeardownSpec: &net.TeardownSpec{
-					IPTablesRules:   [][]string{},
-					DHCPReservation: "",
-					Network:         "",
-				},
-			}, nil
+			c.logger.Error("bridge not found", "bridge", bridgeName, "domain", req.DomainName)
+			c.logger.Error("ensure the bridge interface exists", "bridge", bridgeName, "domain", req.DomainName)
+			c.logger.Error("you can create it with: sudo ip link add name", "bridge", bridgeName, "type", "bridge")
+			return nil, fmt.Errorf("bridge interface %s does not exist - this should have been created during installation", bridgeName)
 		}
 		c.logger.Debug("bridge interface exists", "bridge", bridgeName)
 	} else {
-		c.logger.Warn("bridge name is empty - this indicates a configuration parsing issue", "domain", req.DomainName)
-		c.logger.Info("check your task configuration for network_interface.bridge.name", "domain", req.DomainName)
+		c.logger.Error("bridge name is empty - this indicates a configuration parsing issue", "domain", req.DomainName)
+		c.logger.Error("check your task configuration for network_interface.bridge.name", "domain", req.DomainName)
+		return nil, fmt.Errorf("bridge name cannot be empty - check nomad-driver-ch configuration")
 	}
 
 	// Determine the guest IP address priority:
@@ -294,19 +287,9 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 		var err error
 		ipAddr, err = c.lookupDHCPLeaseByMAC(mac)
 		if err != nil {
-			c.logger.Warn("failed to lookup DHCP lease, port forwarding will be skipped", "error", err, "vm", req.DomainName)
-			c.logger.Info("DHCP lease lookup failed - port forwarding not available", "vm", req.DomainName)
-			c.logger.Info("Check that dnsmasq is running and lease file exists at /var/lib/misc/dnsmasq.leases", "vm", req.DomainName)
-			return &net.VMStartedBuildResponse{
-				DriverNetwork: &drivers.DriverNetwork{
-					IP: "", // Will be determined by DHCP
-				},
-				TeardownSpec: &net.TeardownSpec{
-					IPTablesRules:   [][]string{}, // No port forwarding rules for DHCP
-					DHCPReservation: "",
-					Network:         bridgeName,
-				},
-			}, nil
+			c.logger.Error("failed to lookup DHCP lease", "error", err, "vm", req.DomainName)
+			c.logger.Error("DHCP lease lookup failed - this should not happen with static IP allocation", "vm", req.DomainName)
+			return nil, fmt.Errorf("DHCP lease lookup failed for VM %s: %w - check network configuration", req.DomainName, err)
 		}
 
 		c.logger.Info("found DHCP-assigned IP from lease file", "ip", ipAddr, "vm", req.DomainName)
@@ -636,7 +619,15 @@ func (c *Controller) lookupDHCPLeaseByMAC(mac string) (string, error) {
 
 // bridgeExists checks if a bridge interface exists on the system
 func (c *Controller) bridgeExists(bridgeName string) bool {
-	// For macOS development, always return true since we're not running on Linux
-	// In production Linux environments, this would check if the bridge actually exists
+	// Check if the bridge interface actually exists
+	if bridgeName == "" {
+		return false
+	}
+
+	// Use ip command to check if bridge exists
+	cmd := exec.Command("ip", "link", "show", bridgeName)
+	if err := cmd.Run(); err != nil {
+		return false
+	}
 	return true
 }
