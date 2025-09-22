@@ -800,7 +800,7 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 
 	d.tasks.Set(cfg.ID, h)
 
-	return handle, nil, nil
+	return handle, netBuildResp.DriverNetwork, nil
 }
 
 // RecoverTask recreates the in-memory state of a task from a TaskHandle.
