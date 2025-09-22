@@ -64,10 +64,10 @@ var (
 		Name:              pluginName,
 	}
 
-	ErrExistingTaks    = errors.New("task is already running")
-	ErrStartingCH      = errors.New("unable to start cloud hypervisor")
-	ErrImageNotFound   = errors.New("disk image not found at path")
-	ErrTaskCrashed     = errors.New("task has crashed")
+	ErrExistingTaks  = errors.New("task is already running")
+	ErrStartingCH    = errors.New("unable to start cloud hypervisor")
+	ErrImageNotFound = errors.New("disk image not found at path")
+	ErrTaskCrashed   = errors.New("task has crashed")
 )
 
 // TaskState is the runtime state which is encoded in the handle returned to
@@ -166,14 +166,14 @@ func NewPlugin(logger hclog.Logger) drivers.DriverPlugin {
 	// Cloud Hypervisor driver will be initialized later in SetConfig
 	// when we have the full configuration available
 	return &VirtDriverPlugin{
-		eventer:           eventer.NewEventer(ctx, logger),
-		config:            &Config{},
-		tasks:             newTaskStore(),
-		baseCtx:           ctx,
-		signalShutdown:    cancel,
-		logger:            logger,
-		networkInit:       atomic.Bool{},
-		imageHandler:      image_tools.NewHandler(logger),
+		eventer:        eventer.NewEventer(ctx, logger),
+		config:         &Config{},
+		tasks:          newTaskStore(),
+		baseCtx:        ctx,
+		signalShutdown: cancel,
+		logger:         logger,
+		networkInit:    atomic.Bool{},
+		imageHandler:   image_tools.NewHandler(logger),
 		// virtualizer and networkController will be set in SetConfig
 	}
 }
@@ -698,9 +698,9 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		Files:             []domain.File{createEnvsFile(cfg.Env)},
 		NetworkInterfaces: driverConfig.NetworkInterfacesConfig,
 		// Cloud Hypervisor specific fields from task config
-		Kernel:            driverConfig.Kernel,
-		Initramfs:         driverConfig.Initramfs,
-		Cmdline:           driverConfig.Cmdline,
+		Kernel:    driverConfig.Kernel,
+		Initramfs: driverConfig.Initramfs,
+		Cmdline:   driverConfig.Cmdline,
 	}
 
 	// Debug logging for path validation
@@ -719,8 +719,14 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		return nil, nil, fmt.Errorf("virt: failed to retrieve guest interfaces %s: %w", cfg.AllocID, err)
 	}
 	hwaddrs := make([]string, len(ifaces))
+	guestIPs := make([]string, 0)
 	for i, iface := range ifaces {
 		hwaddrs[i] = iface.MAC
+		for _, addr := range iface.Addrs {
+			if addr.IsValid() {
+				guestIPs = append(guestIPs, addr.String())
+			}
+		}
 	}
 
 	h := &taskHandle{
@@ -747,6 +753,7 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		NetConfig:  &driverConfig.NetworkInterfacesConfig,
 		Resources:  cfg.Resources,
 		Hwaddrs:    hwaddrs,
+		GuestIPs:   guestIPs,
 	}
 
 	// Build out the network now that the VM has been started.

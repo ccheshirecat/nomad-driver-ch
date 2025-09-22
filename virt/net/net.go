@@ -31,6 +31,7 @@ type VMStartedBuildRequest struct {
 	NetConfig  *NetworkInterfacesConfig
 	Resources  *drivers.Resources
 	Hwaddrs    []string
+	GuestIPs   []string
 }
 
 // VMStartedBuildResponse is the response sent object once the network

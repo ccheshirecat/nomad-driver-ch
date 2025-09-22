@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/ccheshirecat/nomad-driver-ch/cloudinit"
@@ -64,22 +63,24 @@ func (d *Driver) createCloudInit(config *domain.Config, proc *VMProcess, workDir
 	// Configure network settings dynamically based on VM and task configuration
 	var networkConfig *cloudinit.NetworkConfig
 	if proc.IP != "" || len(config.NetworkInterfaces) > 0 {
-		// Start with defaults
-		netmask := "24" // Default /24 subnet
+		// Start with defaults derived from the driver's parsed network config
+		netmask := "24"
+		if d.subnet.IsValid() {
+			netmask = fmt.Sprintf("%d", d.subnet.Bits())
+		}
+
 		gateway := d.networkConfig.Gateway
+		if d.gatewayIP.IsValid() {
+			gateway = d.gatewayIP.String()
+		}
+
 		ipAddress := proc.IP
-		interfaceName := "eth0" // Default interface
+		interfaceName := "eth0"                       // Default interface
 		nameservers := []string{"8.8.8.8", "8.8.4.4"} // Default DNS servers
 
-		// Override with driver network config if available
-		if d.networkConfig.SubnetCIDR != "" {
-			// Extract netmask from CIDR (e.g., "194.31.143.0/24" -> "24")
-			if parts := strings.Split(d.networkConfig.SubnetCIDR, "/"); len(parts) == 2 {
-				netmask = parts[1]
-			}
-		}
-		if gateway == "" {
-			gateway = "194.31.143.1" // Fallback gateway for 194.31.143.0/24 network
+		// Respect explicitly configured gateway if we don't have a parsed value
+		if gateway == "" && d.networkConfig.Gateway != "" {
+			gateway = d.networkConfig.Gateway
 		}
 
 		// Override with task-specific network configuration if provided
@@ -312,7 +313,7 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 		},
 		Memory: MemoryConfig{
 			Size:   int64(config.Memory) * 1024 * 1024, // Convert MB to bytes
-			Shared: true, // Required for virtio-fs
+			Shared: true,                               // Required for virtio-fs
 		},
 		Console: ConsoleConfig{Mode: "Null"}, // Disable console
 		Serial:  SerialConfig{Mode: "File", File: filepath.Join(proc.WorkDir, "serial.log")},
@@ -371,19 +372,8 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 	// Add static IP configuration if available (cloud-init will handle final network setup)
 	if proc.IP != "" {
 		netConfig.IP = proc.IP
-
-		// Calculate subnet mask from CIDR
-		if d.networkConfig.SubnetCIDR != "" {
-			if parts := strings.Split(d.networkConfig.SubnetCIDR, "/"); len(parts) == 2 {
-				// Convert CIDR notation to dotted decimal mask (e.g., /24 -> 255.255.255.0)
-				if parts[1] == "24" {
-					netConfig.Mask = "255.255.255.0"
-				} else if parts[1] == "16" {
-					netConfig.Mask = "255.255.0.0"
-				} else if parts[1] == "8" {
-					netConfig.Mask = "255.0.0.0"
-				}
-			}
+		if mask := maskStringFromPrefix(d.subnet); mask != "" {
+			netConfig.Mask = mask
 		}
 	}
 

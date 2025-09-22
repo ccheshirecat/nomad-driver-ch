@@ -19,9 +19,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/ccheshirecat/nomad-driver-ch/cloudinit"
 	domain "github.com/ccheshirecat/nomad-driver-ch/internal/shared"
+	"github.com/hashicorp/go-hclog"
 )
 
 const (
@@ -39,17 +39,17 @@ const (
 
 // VMProcess represents a running VM process with its metadata
 type VMProcess struct {
-	Name         string
-	Pid          int
-	APISocket    string
-	LogFile      string
-	WorkDir      string
-	TapName      string
-	MAC          string
-	IP           string
+	Name          string
+	Pid           int
+	APISocket     string
+	LogFile       string
+	WorkDir       string
+	TapName       string
+	MAC           string
+	IP            string
 	VirtiofsdPIDs []int
-	Config       *VMConfig
-	StartedAt    time.Time
+	Config        *VMConfig
+	StartedAt     time.Time
 }
 
 // Driver implements the Virtualizer interface for Cloud Hypervisor
@@ -71,7 +71,12 @@ type Driver struct {
 
 	// IP allocation state
 	allocatedIPs map[string]bool // IP -> allocated
-	ipCounter    int
+
+	// Parsed network configuration for quick reuse
+	ipPoolStart netip.Addr
+	ipPoolEnd   netip.Addr
+	subnet      netip.Prefix
+	gatewayIP   netip.Addr
 
 	// For testing - skip binary validation
 	skipBinaryValidation bool
@@ -84,18 +89,18 @@ type CloudInit interface {
 
 // VMConfig represents the JSON structure for CH vm.create API
 type VMConfig struct {
-	CPUs     CPUConfig      `json:"cpus"`
-	Memory   MemoryConfig   `json:"memory"`
-	Payload  *PayloadConfig `json:"payload,omitempty"`
-	Disks    []DiskConfig   `json:"disks,omitempty"`
-	Net      []NetConfig    `json:"net,omitempty"`
-	RNG      *RNGConfig     `json:"rng,omitempty"`
-	Vsock    *VsockConfig   `json:"vsock,omitempty"`
-	FS       []FSConfig     `json:"fs,omitempty"`
+	CPUs     CPUConfig       `json:"cpus"`
+	Memory   MemoryConfig    `json:"memory"`
+	Payload  *PayloadConfig  `json:"payload,omitempty"`
+	Disks    []DiskConfig    `json:"disks,omitempty"`
+	Net      []NetConfig     `json:"net,omitempty"`
+	RNG      *RNGConfig      `json:"rng,omitempty"`
+	Vsock    *VsockConfig    `json:"vsock,omitempty"`
+	FS       []FSConfig      `json:"fs,omitempty"`
 	Platform *PlatformConfig `json:"platform,omitempty"`
-	Devices  []DeviceConfig `json:"devices,omitempty"`
-	Console  ConsoleConfig  `json:"console"`
-	Serial   SerialConfig   `json:"serial"`
+	Devices  []DeviceConfig  `json:"devices,omitempty"`
+	Console  ConsoleConfig   `json:"console"`
+	Serial   SerialConfig    `json:"serial"`
 }
 
 type CPUConfig struct {
@@ -105,16 +110,16 @@ type CPUConfig struct {
 }
 
 type MemoryConfig struct {
-	Size           int64  `json:"size"`
-	Shared         bool   `json:"shared,omitempty"`
-	Hugepages      bool   `json:"hugepages,omitempty"`
-	HotplugMethod  string `json:"hotplug_method,omitempty"`
-	HotplugSize    int64  `json:"hotplug_size,omitempty"`
+	Size          int64  `json:"size"`
+	Shared        bool   `json:"shared,omitempty"`
+	Hugepages     bool   `json:"hugepages,omitempty"`
+	HotplugMethod string `json:"hotplug_method,omitempty"`
+	HotplugSize   int64  `json:"hotplug_size,omitempty"`
 }
 
 type PayloadConfig struct {
-	Kernel   string `json:"kernel"`
-	Cmdline  string `json:"cmdline"`
+	Kernel    string `json:"kernel"`
+	Cmdline   string `json:"cmdline"`
 	Initramfs string `json:"initramfs,omitempty"`
 }
 
@@ -125,9 +130,9 @@ type DiskConfig struct {
 }
 
 type NetConfig struct {
-	Tap string `json:"tap"`
-	MAC string `json:"mac"`
-	IP  string `json:"ip,omitempty"`
+	Tap  string `json:"tap"`
+	MAC  string `json:"mac"`
+	IP   string `json:"ip,omitempty"`
 	Mask string `json:"mask,omitempty"`
 }
 
@@ -154,18 +159,18 @@ type PlatformConfig struct {
 }
 
 type DeviceConfig struct {
-	Path        string `json:"path"`
-	ID          string `json:"id,omitempty"`
-	IOMMU       bool   `json:"iommu,omitempty"`
-	PCISegment  uint   `json:"pci_segment,omitempty"`
+	Path       string `json:"path"`
+	ID         string `json:"id,omitempty"`
+	IOMMU      bool   `json:"iommu,omitempty"`
+	PCISegment uint   `json:"pci_segment,omitempty"`
 }
 
 // VFIODeviceConfig represents a VFIO device configuration
 type VFIODeviceConfig struct {
-	Path        string `json:"path"`
-	ID          string `json:"id,omitempty"`
-	IOMMU       bool   `json:"iommu,omitempty"`
-	PCISegment  uint   `json:"pci_segment,omitempty"`
+	Path       string `json:"path"`
+	ID         string `json:"id,omitempty"`
+	IOMMU      bool   `json:"iommu,omitempty"`
+	PCISegment uint   `json:"pci_segment,omitempty"`
 }
 
 type ConsoleConfig struct {
@@ -181,8 +186,8 @@ type SerialConfig struct {
 type VMInfo struct {
 	State  string `json:"state"`
 	Memory struct {
-		ActualSize   uint64 `json:"actual_size"`
-		LastUpdate   uint64 `json:"last_update_ts"`
+		ActualSize uint64 `json:"actual_size"`
+		LastUpdate uint64 `json:"last_update_ts"`
 	} `json:"memory"`
 	Balloons []interface{} `json:"balloons"`
 	Block    []interface{} `json:"block"`
@@ -197,13 +202,12 @@ func New(ctx context.Context, logger hclog.Logger, config *domain.CloudHyperviso
 // NewWithSkipValidation creates a new Cloud Hypervisor driver with optional binary validation skip
 func NewWithSkipValidation(ctx context.Context, logger hclog.Logger, config *domain.CloudHypervisor, netConfig *domain.Network, dataDir string, skipValidation bool) *Driver {
 	d := &Driver{
-		logger:        logger.Named("cloud-hypervisor"),
-		config:        config,
-		networkConfig: netConfig,
-		dataDir:       dataDir,
+		logger:               logger.Named("cloud-hypervisor"),
+		config:               config,
+		networkConfig:        netConfig,
+		dataDir:              dataDir,
 		processes:            make(map[string]*VMProcess),
 		allocatedIPs:         make(map[string]bool),
-		ipCounter:            100, // Start from .100
 		skipBinaryValidation: skipValidation,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
@@ -216,8 +220,78 @@ func NewWithSkipValidation(ctx context.Context, logger hclog.Logger, config *dom
 		},
 	}
 
+	d.initializeNetworkConfig()
+
 	go d.monitorCtx(ctx)
 	return d
+}
+
+// initializeNetworkConfig pre-parses the network configuration so we can allocate
+// deterministic IP addresses and populate cloud-init without relying on
+// hard-coded defaults.
+func (d *Driver) initializeNetworkConfig() {
+	if d.networkConfig == nil {
+		return
+	}
+
+	if cidr := d.networkConfig.SubnetCIDR; cidr != "" {
+		if prefix, err := netip.ParsePrefix(cidr); err == nil {
+			d.subnet = prefix.Masked()
+		} else {
+			d.logger.Warn("invalid subnet CIDR, network defaults will be skipped", "cidr", cidr, "error", err)
+		}
+	}
+
+	if start := d.networkConfig.IPPoolStart; start != "" {
+		if addr, err := netip.ParseAddr(start); err == nil {
+			d.ipPoolStart = addr
+		} else {
+			d.logger.Warn("invalid IP pool start", "ip", start, "error", err)
+		}
+	}
+
+	if end := d.networkConfig.IPPoolEnd; end != "" {
+		if addr, err := netip.ParseAddr(end); err == nil {
+			d.ipPoolEnd = addr
+		} else {
+			d.logger.Warn("invalid IP pool end", "ip", end, "error", err)
+		}
+	}
+
+	if gw := d.networkConfig.Gateway; gw != "" {
+		if addr, err := netip.ParseAddr(gw); err == nil {
+			d.gatewayIP = addr
+		} else {
+			d.logger.Warn("invalid gateway", "gateway", gw, "error", err)
+		}
+	}
+
+	if d.subnet.IsValid() {
+		// Ensure the gateway defaults to the first usable address if not explicitly set.
+		if !d.gatewayIP.IsValid() {
+			networkAddr := d.subnet.Addr()
+			next := networkAddr.Next()
+			if next.IsValid() && d.subnet.Contains(next) {
+				d.gatewayIP = next
+			}
+		}
+
+		// Validate that pool bounds fall within the subnet; warn otherwise.
+		if d.ipPoolStart.IsValid() && !d.subnet.Contains(d.ipPoolStart) {
+			d.logger.Warn("IP pool start is outside configured subnet", "ip", d.ipPoolStart.String(), "subnet", d.subnet.String())
+			d.ipPoolStart = netip.Addr{}
+		}
+		if d.ipPoolEnd.IsValid() && !d.subnet.Contains(d.ipPoolEnd) {
+			d.logger.Warn("IP pool end is outside configured subnet", "ip", d.ipPoolEnd.String(), "subnet", d.subnet.String())
+			d.ipPoolEnd = netip.Addr{}
+		}
+	}
+
+	// Ensure start <= end when both are defined.
+	if d.ipPoolStart.IsValid() && d.ipPoolEnd.IsValid() && d.ipPoolEnd.Compare(d.ipPoolStart) < 0 {
+		d.logger.Warn("IP pool end precedes start; swapping values", "start", d.ipPoolStart.String(), "end", d.ipPoolEnd.String())
+		d.ipPoolStart, d.ipPoolEnd = d.ipPoolEnd, d.ipPoolStart
+	}
 }
 
 // monitorCtx handles context cancellation cleanup
@@ -332,6 +406,17 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 	if len(config.NetworkInterfaces) > 0 && config.NetworkInterfaces[0].Bridge != nil && config.NetworkInterfaces[0].Bridge.StaticIP != "" {
 		// Use task-specified static IP
 		ip = config.NetworkInterfaces[0].Bridge.StaticIP
+		if d.subnet.IsValid() {
+			if addr, err := netip.ParseAddr(ip); err == nil && !d.subnet.Contains(addr) {
+				return fmt.Errorf("static IP %s is outside configured subnet %s", ip, d.subnet.String())
+			}
+		}
+
+		if d.allocatedIPs[ip] {
+			return fmt.Errorf("static IP %s is already allocated", ip)
+		}
+
+		d.allocatedIPs[ip] = true
 		d.logger.Info("using task-specified static IP", "ip", ip, "vm", config.Name)
 	} else {
 		// Allocate IP from pool
@@ -590,23 +675,52 @@ func (d *Driver) GetDomain(name string) (*domain.Info, error) {
 		State:     domainState,
 		Memory:    info.Memory.ActualSize,
 		MaxMemory: info.Memory.ActualSize, // CH doesn't distinguish
-		CPUTime:   0, // TODO: extract if available
+		CPUTime:   0,                      // TODO: extract if available
 	}, nil
 }
 
 // Helper functions below...
 
 func (d *Driver) allocateIP() (string, error) {
-	// Simple IP allocation from pool
-	// TODO: Make this more robust with persistence
-	for i := 100; i <= 200; i++ {
-		ip := fmt.Sprintf("194.31.143.%d", i)
-		if !d.allocatedIPs[ip] {
-			d.allocatedIPs[ip] = true
-			return ip, nil
-		}
+	if !d.ipPoolStart.IsValid() || !d.ipPoolEnd.IsValid() {
+		return "", fmt.Errorf("IP pool is not configured; set network.ip_pool_start and network.ip_pool_end")
 	}
-	return "", fmt.Errorf("no available IPs in pool")
+
+	for ip := d.ipPoolStart; ; {
+		if d.subnet.IsValid() && !d.subnet.Contains(ip) {
+			return "", fmt.Errorf("allocated IP %s is outside configured subnet %s", ip.String(), d.subnet.String())
+		}
+
+		if d.gatewayIP.IsValid() && ip == d.gatewayIP {
+			if ip == d.ipPoolEnd {
+				break
+			}
+			next := ip.Next()
+			if !next.IsValid() {
+				break
+			}
+			ip = next
+			continue
+		}
+
+		ipStr := ip.String()
+		if !d.allocatedIPs[ipStr] {
+			d.allocatedIPs[ipStr] = true
+			return ipStr, nil
+		}
+
+		if ip == d.ipPoolEnd {
+			break
+		}
+
+		next := ip.Next()
+		if !next.IsValid() {
+			break
+		}
+		ip = next
+	}
+
+	return "", fmt.Errorf("no available IPs in pool %s-%s", d.ipPoolStart.String(), d.ipPoolEnd.String())
 }
 
 func (d *Driver) deallocateIP(ip string) {
@@ -647,6 +761,24 @@ func parseIPAddr(ipStr string) (net.IP, error) {
 		return nil, fmt.Errorf("invalid IP address: %s", ipStr)
 	}
 	return ip, nil
+}
+
+func maskStringFromPrefix(prefix netip.Prefix) string {
+	if !prefix.IsValid() {
+		return ""
+	}
+
+	addr := prefix.Addr()
+	if !addr.Is4() {
+		return ""
+	}
+
+	mask := net.CIDRMask(prefix.Bits(), 32)
+	if len(mask) != net.IPv4len {
+		return ""
+	}
+
+	return fmt.Sprintf("%d.%d.%d.%d", mask[0], mask[1], mask[2], mask[3])
 }
 
 // addVFIODevices adds VFIO devices to the VM configuration

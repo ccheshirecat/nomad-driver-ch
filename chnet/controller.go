@@ -9,17 +9,18 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	stdnet "net"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
-	stdnet "net"
 	"time"
 
+	domain "github.com/ccheshirecat/nomad-driver-ch/internal/shared"
+	"github.com/ccheshirecat/nomad-driver-ch/virt/net"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-multierror"
-	domain "github.com/ccheshirecat/nomad-driver-ch/internal/shared"
-	"github.com/ccheshirecat/nomad-driver-ch/virt/net"
 	"github.com/hashicorp/nomad/plugins/drivers"
 	"github.com/hashicorp/nomad/plugins/shared/structs"
 )
@@ -261,9 +262,9 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 					IP: "", // No network available
 				},
 				TeardownSpec: &net.TeardownSpec{
-					IPTablesRules:    [][]string{},
-					DHCPReservation:  "",
-					Network:          "",
+					IPTablesRules:   [][]string{},
+					DHCPReservation: "",
+					Network:         "",
 				},
 			}, nil
 		}
@@ -273,16 +274,20 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 		c.logger.Info("check your task configuration for network_interface.bridge.name", "domain", req.DomainName)
 	}
 
-	// For Cloud Hypervisor, we need to handle both static IP and DHCP cases
-	// If static IP is configured in the task, use it for port forwarding
-	// If DHCP is used, try to get the IP from dnsmasq lease file
+	// Determine the guest IP address priority:
+	//  1. Value provided by the virtualizer (GuestIPs)
+	//  2. Static IP specified in the job configuration
+	//  3. DHCP lease lookup (legacy fallback)
 	var ipAddr string
-	if netInterface.Bridge != nil && netInterface.Bridge.StaticIP != "" {
+	if len(req.GuestIPs) > 0 && req.GuestIPs[0] != "" {
+		ipAddr = req.GuestIPs[0]
+		c.logger.Debug("using IP reported by virtualizer", "ip", ipAddr, "vm", req.DomainName)
+	} else if netInterface.Bridge != nil && netInterface.Bridge.StaticIP != "" {
 		ipAddr = netInterface.Bridge.StaticIP
 		c.logger.Debug("using static IP from task configuration", "ip", ipAddr)
 	} else {
-		// DHCP case - try to get IP from dnsmasq lease file
-		// Generate deterministic MAC from domain name
+		// DHCP case - try to get IP from dnsmasq lease file as a fallback for
+		// legacy environments
 		mac := c.generateDeterministicMAC(req.DomainName)
 		c.logger.Debug("generated deterministic MAC for DHCP", "mac", mac, "vm", req.DomainName)
 
@@ -297,9 +302,9 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 					IP: "", // Will be determined by DHCP
 				},
 				TeardownSpec: &net.TeardownSpec{
-					IPTablesRules:    [][]string{}, // No port forwarding rules for DHCP
-					DHCPReservation:  "",
-					Network:          bridgeName,
+					IPTablesRules:   [][]string{}, // No port forwarding rules for DHCP
+					DHCPReservation: "",
+					Network:         bridgeName,
 				},
 			}, nil
 		}
@@ -339,19 +344,44 @@ func (c *Controller) getVMStaticIP(domainName string, hwaddrs []string) (string,
 		}
 	}
 
-	// Fallback: generate deterministic IP based on domain name hash
-	// This ensures consistent IP assignment for VMs without explicit IP configuration
-	hash := 0
-	for _, c := range domainName {
-		hash = hash*31 + int(c)
+	// Fallback: generate deterministic IP based on the configured pool.
+	start, errStart := netip.ParseAddr(c.networkConfig.IPPoolStart)
+	end, errEnd := netip.ParseAddr(c.networkConfig.IPPoolEnd)
+	if errStart == nil && errEnd == nil && start.Is4() && end.Is4() {
+		startVal := ipv4ToUint32(start)
+		endVal := ipv4ToUint32(end)
+		if endVal < startVal {
+			startVal, endVal = endVal, startVal
+		}
+
+		rangeSize := endVal - startVal + 1
+		if rangeSize > 0 {
+			hash := uint32(0)
+			for _, r := range domainName {
+				hash = hash*31 + uint32(r)
+			}
+
+			candidate := startVal + (hash % rangeSize)
+
+			if gw := c.networkConfig.Gateway; gw != "" {
+				if gatewayAddr, err := netip.ParseAddr(gw); err == nil && gatewayAddr.Is4() {
+					gatewayVal := ipv4ToUint32(gatewayAddr)
+					if candidate == gatewayVal {
+						candidate = startVal + ((candidate - startVal + 1) % rangeSize)
+					}
+				}
+			}
+
+			addr := uint32ToIPv4(candidate)
+			if addr.IsValid() {
+				ip := addr.String()
+				c.logger.Debug("generated fallback IP for VM", "ip", ip, "vm", domainName)
+				return ip, nil
+			}
+		}
 	}
 
-	// Generate IP in the configured pool range
-	ipOffset := (hash % 100) + 100 // 100-199 range
-	ip := fmt.Sprintf("194.31.143.%d", ipOffset)
-
-	c.logger.Debug("generated fallback IP for VM", "ip", ip, "vm", domainName)
-	return ip, nil
+	return "", fmt.Errorf("unable to derive fallback IP for %s", domainName)
 }
 
 // configureIPTables is responsible for adding the iptables entries to enable
@@ -523,6 +553,20 @@ func (c *Controller) VMTerminatedTeardown(req *net.VMTerminatedTeardownRequest) 
 	// No DHCP reservation cleanup needed for Cloud Hypervisor since we use static IPs
 
 	return &net.VMTerminatedTeardownResponse{}, mErr.ErrorOrNil()
+}
+
+func ipv4ToUint32(addr netip.Addr) uint32 {
+	b := addr.As4()
+	return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+}
+
+func uint32ToIPv4(val uint32) netip.Addr {
+	return netip.AddrFrom4([4]byte{
+		byte(val >> 24),
+		byte(val >> 16),
+		byte(val >> 8),
+		byte(val),
+	})
 }
 
 // generateDeterministicMAC generates a deterministic MAC address from domain name
