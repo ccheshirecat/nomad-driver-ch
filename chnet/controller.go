@@ -312,9 +312,9 @@ func (c *Controller) VMStartedBuild(req *net.VMStartedBuildRequest) (*net.VMStar
 	}, nil
 }
 
-// getVMStaticIP extracts or determines the static IP for a VM
+// extractVMStaticIP extracts or determines the static IP for a VM
 // This method should be coordinated with the CH driver's IP allocation
-func (c *Controller) getVMStaticIP(domainName string, hwaddrs []string) (string, error) {
+func (c *Controller) extractVMStaticIP(domainName string, hwaddrs []string) (string, error) {
 	// Check if hwaddrs contains IP information (from Cloud Hypervisor driver)
 	if len(hwaddrs) > 0 {
 		for _, addr := range hwaddrs {
