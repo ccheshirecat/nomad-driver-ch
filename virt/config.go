@@ -153,6 +153,7 @@ var (
 		// isolation of host.
 		NetIsolationModes: []drivers.NetIsolationMode{
 			drivers.NetIsolationModeHost,
+			drivers.NetIsolationModeGroup,
 		},
 
 		// MustInitiateNetwork is set to false, indicating the driver does not
