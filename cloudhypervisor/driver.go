@@ -267,7 +267,7 @@ func (d *Driver) initializeNetworkConfig() {
 	}
 
 	// If gateway or subnet are still unset, try to infer them from the bridge itself.
-	if (!d.gatewayIP.IsValid() || !d.subnet.IsValid()) && d.networkConfig.Bridge != "" {
+	if (!d.gatewayIP.IsValid() || !d.subnet.IsValid() || !d.ipPoolStart.IsValid() || !d.ipPoolEnd.IsValid()) && d.networkConfig.Bridge != "" {
 		d.detectBridgeNetwork()
 	}
 
@@ -324,22 +324,64 @@ func (d *Driver) detectBridgeNetwork() {
 			continue
 		}
 
-		if !d.gatewayIP.IsValid() {
-			if gateway, ok := netip.AddrFromSlice(ip4); ok {
-				d.gatewayIP = gateway
+		addrNet, okPrefix := netip.AddrFromSlice(ip4)
+		if okPrefix {
+			if !d.gatewayIP.IsValid() {
+				d.gatewayIP = addrNet
 			}
-		}
 
-		if !d.subnet.IsValid() {
-			if prefixBits, totalBits := ipNet.Mask.Size(); prefixBits > 0 && totalBits == 32 {
-				if base, ok := netip.AddrFromSlice(ip4); ok {
-					d.subnet = netip.PrefixFrom(base, prefixBits).Masked()
+			if !d.subnet.IsValid() {
+				if prefixBits, totalBits := ipNet.Mask.Size(); prefixBits > 0 && totalBits == 32 {
+					d.subnet = netip.PrefixFrom(addrNet, prefixBits).Masked()
 				}
 			}
 		}
 
+		if (!d.ipPoolStart.IsValid() || !d.ipPoolEnd.IsValid()) && d.subnet.IsValid() {
+			d.deriveDefaultPool()
+		}
+
 		// We've populated the fields we care about, no need to inspect additional addresses.
 		return
+	}
+}
+
+// deriveDefaultPool computes a simple address pool inside the detected subnet
+// when the plugin configuration omitted explicit IP pool bounds.
+func (d *Driver) deriveDefaultPool() {
+	if !d.subnet.IsValid() {
+		return
+	}
+
+	networkAddr := d.subnet.Addr()
+
+	// Advance to the first usable host address
+	if next := networkAddr.Next(); next.IsValid() && d.subnet.Contains(next) {
+		networkAddr = next
+	}
+
+	start := networkAddr
+	// Skip the gateway if it matches the candidate start
+	if d.gatewayIP.IsValid() && start == d.gatewayIP {
+		if next := start.Next(); next.IsValid() && d.subnet.Contains(next) {
+			start = next
+		}
+	}
+
+	end := start
+	// Try to carve out up to 64 hosts inside the subnet
+	for i := 0; i < 63; i++ {
+		next := end.Next()
+		if !next.IsValid() || !d.subnet.Contains(next) {
+			break
+		}
+		end = next
+	}
+
+	if start.IsValid() && end.IsValid() && end.Compare(start) >= 0 {
+		d.ipPoolStart = start
+		d.ipPoolEnd = end
+		d.logger.Info("derived IP pool from bridge", "start", d.ipPoolStart.String(), "end", d.ipPoolEnd.String())
 	}
 }
 
