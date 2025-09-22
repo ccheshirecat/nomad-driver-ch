@@ -28,9 +28,9 @@ var (
 				hclspec.NewAttr("virtiofsd_bin", "string", false),
 				hclspec.NewLiteral(`"/usr/libexec/virtiofsd"`),
 			),
-			"default_kernel":   hclspec.NewAttr("default_kernel", "string", false),
+			"default_kernel":    hclspec.NewAttr("default_kernel", "string", false),
 			"default_initramfs": hclspec.NewAttr("default_initramfs", "string", false),
-			"firmware":         hclspec.NewAttr("firmware", "string", false),
+			"firmware":          hclspec.NewAttr("firmware", "string", false),
 			"seccomp": hclspec.NewDefault(
 				hclspec.NewAttr("seccomp", "string", false),
 				hclspec.NewLiteral(`"true"`),
@@ -68,7 +68,7 @@ var (
 			"iommu_address_width": hclspec.NewAttr("iommu_address_width", "number", false),
 			"pci_segments":        hclspec.NewAttr("pci_segments", "number", false),
 		})),
-		"data_dir":     hclspec.NewAttr("data_dir", "string", false),
+		"data_dir":    hclspec.NewAttr("data_dir", "string", false),
 		"image_paths": hclspec.NewAttr("image_paths", "list(string)", false),
 	})
 
@@ -93,19 +93,19 @@ var (
 		})),
 		"timezone": hclspec.NewAttr("timezone", "string", false),
 		// Cloud Hypervisor specific fields
-		"kernel":       hclspec.NewAttr("kernel", "string", false),
-		"initramfs":    hclspec.NewAttr("initramfs", "string", false),
-		"cmdline":      hclspec.NewAttr("cmdline", "string", false),
-		"max_vcpus":    hclspec.NewAttr("max_vcpus", "number", false),
-		"features":     hclspec.NewAttr("features", "list(string)", false),
+		"kernel":           hclspec.NewAttr("kernel", "string", false),
+		"initramfs":        hclspec.NewAttr("initramfs", "string", false),
+		"cmdline":          hclspec.NewAttr("cmdline", "string", false),
+		"max_vcpus":        hclspec.NewAttr("max_vcpus", "number", false),
+		"features":         hclspec.NewAttr("features", "list(string)", false),
 		"memory_hugepages": hclspec.NewAttr("memory_hugepages", "bool", false),
 		"memory_shared":    hclspec.NewAttr("memory_shared", "bool", false),
 		"hotplug_method":   hclspec.NewAttr("hotplug_method", "string", false),
 		"hotplug_size":     hclspec.NewAttr("hotplug_size", "string", false),
 		"disks": hclspec.NewBlockList("disk", hclspec.NewObject(map[string]*hclspec.Spec{
-			"path":              hclspec.NewAttr("path", "string", true),
-			"readonly":          hclspec.NewAttr("readonly", "bool", false),
-			"serial":            hclspec.NewAttr("serial", "string", false),
+			"path":             hclspec.NewAttr("path", "string", true),
+			"readonly":         hclspec.NewAttr("readonly", "bool", false),
+			"serial":           hclspec.NewAttr("serial", "string", false),
 			"rate_limit_group": hclspec.NewAttr("rate_limit_group", "string", false),
 		})),
 		"fs_mounts": hclspec.NewBlockList("fs_mount", hclspec.NewObject(map[string]*hclspec.Spec{
@@ -123,19 +123,19 @@ var (
 			"src": hclspec.NewAttr("src", "string", false),
 		})),
 		"devices": hclspec.NewBlockList("device", hclspec.NewObject(map[string]*hclspec.Spec{
-			"path":   hclspec.NewAttr("path", "string", true),
-			"id":     hclspec.NewAttr("id", "string", false),
-			"iommu":  hclspec.NewAttr("iommu", "bool", false),
+			"path":  hclspec.NewAttr("path", "string", true),
+			"id":    hclspec.NewAttr("id", "string", false),
+			"iommu": hclspec.NewAttr("iommu", "bool", false),
 		})),
 		"platform": hclspec.NewBlock("platform", false, hclspec.NewObject(map[string]*hclspec.Spec{
-			"num_pci_segments":   hclspec.NewAttr("num_pci_segments", "number", false),
-			"iommu_segments":     hclspec.NewAttr("iommu_segments", "list(number)", false),
+			"num_pci_segments":    hclspec.NewAttr("num_pci_segments", "number", false),
+			"iommu_segments":      hclspec.NewAttr("iommu_segments", "list(number)", false),
 			"iommu_address_width": hclspec.NewAttr("iommu_address_width", "number", false),
 		})),
 		// VFIO device passthrough
 		"vfio_devices": hclspec.NewAttr("vfio_devices", "list(string)", false),
 		// USB device passthrough
-		"usb_devices":  hclspec.NewAttr("usb_devices", "list(string)", false),
+		"usb_devices": hclspec.NewAttr("usb_devices", "list(string)", false),
 	})
 
 	// capabilities indicates what optional features this driver supports
@@ -170,44 +170,43 @@ var (
 // this plugin.
 type TaskConfig struct {
 	// Existing fields
-	ImagePath           string         `codec:"image"`
-	Hostname            string         `codec:"hostname"`
-	OS                  *OS            `codec:"os"`
-	UserData            string         `codec:"user_data"`
-	TimeZone            *time.Location `codec:"timezone"`
-	CMDs                []string       `codec:"cmds"`
+	ImagePath string         `codec:"image"`
+	Hostname  string         `codec:"hostname"`
+	OS        *OS            `codec:"os"`
+	UserData  string         `codec:"user_data"`
+	TimeZone  *time.Location `codec:"timezone"`
+	CMDs      []string       `codec:"cmds"`
 	// Device passthrough
-	VFIODevices         []string       `codec:"vfio_devices"`
-	USBDevices          []string       `codec:"usb_devices"`
-	DefaultUserSSHKey   string         `codec:"default_user_authorized_ssh_key"`
-	DefaultUserPassword string         `codec:"default_user_password"`
-	UseThinCopy         bool           `codec:"use_thin_copy"`
+	VFIODevices         []string `codec:"vfio_devices"`
+	USBDevices          []string `codec:"usb_devices"`
+	DefaultUserSSHKey   string   `codec:"default_user_authorized_ssh_key"`
+	DefaultUserPassword string   `codec:"default_user_password"`
+	UseThinCopy         bool     `codec:"use_thin_copy"`
 	// The list of network interfaces that should be added to the VM.
 	net.NetworkInterfacesConfig `codec:"network_interface"`
 	// Cloud Hypervisor specific fields
-	Kernel          string           `codec:"kernel"`
-	Initramfs       string           `codec:"initramfs"`
-	Cmdline         string           `codec:"cmdline"`
-	MaxVCPUs        uint             `codec:"max_vcpus"`
-	Features        []string         `codec:"features"`
-	MemoryHugepages bool             `codec:"memory_hugepages"`
-	MemoryShared    bool             `codec:"memory_shared"`
-	HotplugMethod   string           `codec:"hotplug_method"`
-	HotplugSize     string           `codec:"hotplug_size"`
-	Disks           []DiskConfig     `codec:"disks"`
-	FSMounts        []FSMountConfig  `codec:"fs_mounts"`
-	Vsock           *VsockConfig     `codec:"vsock"`
-	Rng             *RngConfig       `codec:"rng"`
-	Devices         []DeviceConfig   `codec:"devices"`
-	Platform        *PlatformConfig  `codec:"platform"`
+	Kernel          string          `codec:"kernel"`
+	Initramfs       string          `codec:"initramfs"`
+	Cmdline         string          `codec:"cmdline"`
+	MaxVCPUs        uint            `codec:"max_vcpus"`
+	Features        []string        `codec:"features"`
+	MemoryHugepages bool            `codec:"memory_hugepages"`
+	MemoryShared    bool            `codec:"memory_shared"`
+	HotplugMethod   string          `codec:"hotplug_method"`
+	HotplugSize     string          `codec:"hotplug_size"`
+	Disks           []DiskConfig    `codec:"disks"`
+	FSMounts        []FSMountConfig `codec:"fs_mounts"`
+	Vsock           *VsockConfig    `codec:"vsock"`
+	Rng             *RngConfig      `codec:"rng"`
+	Devices         []DeviceConfig  `codec:"devices"`
+	Platform        *PlatformConfig `codec:"platform"`
 }
 
 type OS struct {
- 	Arch    string `codec:"arch"`
- 	Machine string `codec:"machine"`
- 	Variant string `codec:"variant"`
+	Arch    string `codec:"arch"`
+	Machine string `codec:"machine"`
+	Variant string `codec:"variant"`
 }
-
 
 type DiskConfig struct {
 	Path           string `codec:"path"`
@@ -250,7 +249,7 @@ type Config struct {
 	CloudHypervisor domain.CloudHypervisor `codec:"cloud_hypervisor"`
 	Network         domain.Network         `codec:"network"`
 	VFIO            domain.VFIO            `codec:"vfio"`
-	DataDir         string          `codec:"data_dir"`
+	DataDir         string                 `codec:"data_dir"`
 	// ImagePaths is an allow-list of paths cloud hypervisor is allowed to load an image from
 	ImagePaths []string `codec:"image_paths"`
 }
@@ -262,16 +261,16 @@ func (c *Config) initDefaults() {
 		c.Network.Bridge = "br0"
 	}
 	if c.Network.SubnetCIDR == "" {
-		c.Network.SubnetCIDR = "192.168.1.0/24"
+		c.Network.SubnetCIDR = "192.168.254.0/24"
 	}
 	if c.Network.Gateway == "" {
-		c.Network.Gateway = "192.168.1.1"
+		c.Network.Gateway = "192.168.254.1"
 	}
 	if c.Network.IPPoolStart == "" {
-		c.Network.IPPoolStart = "192.168.1.100"
+		c.Network.IPPoolStart = "192.168.254.10"
 	}
 	if c.Network.IPPoolEnd == "" {
-		c.Network.IPPoolEnd = "192.168.1.200"
+		c.Network.IPPoolEnd = "192.168.254.200"
 	}
 	if c.Network.TAPPrefix == "" {
 		c.Network.TAPPrefix = "tap"

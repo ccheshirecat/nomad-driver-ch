@@ -266,11 +266,6 @@ func (d *Driver) initializeNetworkConfig() {
 		}
 	}
 
-	// If gateway or subnet are still unset, try to infer them from the bridge itself.
-	if (!d.gatewayIP.IsValid() || !d.subnet.IsValid() || !d.ipPoolStart.IsValid() || !d.ipPoolEnd.IsValid()) && d.networkConfig.Bridge != "" {
-		d.detectBridgeNetwork()
-	}
-
 	if d.subnet.IsValid() {
 		// Ensure the gateway defaults to the first usable address if not explicitly set.
 		if !d.gatewayIP.IsValid() {
@@ -292,97 +287,42 @@ func (d *Driver) initializeNetworkConfig() {
 		}
 	}
 
-	// Ensure start <= end when both are defined.
-	if d.ipPoolStart.IsValid() && d.ipPoolEnd.IsValid() && d.ipPoolEnd.Compare(d.ipPoolStart) < 0 {
-		d.logger.Warn("IP pool end precedes start; swapping values", "start", d.ipPoolStart.String(), "end", d.ipPoolEnd.String())
-		d.ipPoolStart, d.ipPoolEnd = d.ipPoolEnd, d.ipPoolStart
-	}
 }
 
-// detectBridgeNetwork inspects the configured bridge to infer a gateway IP and
-// subnet when they were not provided explicitly in the plugin configuration.
-func (d *Driver) detectBridgeNetwork() {
-	iface, err := net.InterfaceByName(d.networkConfig.Bridge)
-	if err != nil {
-		d.logger.Debug("unable to inspect bridge for network defaults", "bridge", d.networkConfig.Bridge, "error", err)
-		return
+func (d *Driver) validateNetworkConfig() error {
+	if d.networkConfig == nil {
+		return fmt.Errorf("network configuration is not set")
 	}
 
-	addrs, err := iface.Addrs()
-	if err != nil {
-		d.logger.Debug("unable to read bridge addresses", "bridge", d.networkConfig.Bridge, "error", err)
-		return
+	if d.networkConfig.Bridge == "" {
+		return fmt.Errorf("network bridge is not configured")
 	}
 
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if !ok {
-			continue
-		}
-		ip4 := ipNet.IP.To4()
-		if ip4 == nil {
-			continue
-		}
-
-		addrNet, okPrefix := netip.AddrFromSlice(ip4)
-		if okPrefix {
-			if !d.gatewayIP.IsValid() {
-				d.gatewayIP = addrNet
-			}
-
-			if !d.subnet.IsValid() {
-				if prefixBits, totalBits := ipNet.Mask.Size(); prefixBits > 0 && totalBits == 32 {
-					d.subnet = netip.PrefixFrom(addrNet, prefixBits).Masked()
-				}
-			}
-		}
-
-		if (!d.ipPoolStart.IsValid() || !d.ipPoolEnd.IsValid()) && d.subnet.IsValid() {
-			d.deriveDefaultPool()
-		}
-
-		// We've populated the fields we care about, no need to inspect additional addresses.
-		return
-	}
-}
-
-// deriveDefaultPool computes a simple address pool inside the detected subnet
-// when the plugin configuration omitted explicit IP pool bounds.
-func (d *Driver) deriveDefaultPool() {
 	if !d.subnet.IsValid() {
-		return
+		return fmt.Errorf("network subnet_cidr must be configured (e.g. 192.168.254.0/24)")
 	}
 
-	networkAddr := d.subnet.Addr()
-
-	// Advance to the first usable host address
-	if next := networkAddr.Next(); next.IsValid() && d.subnet.Contains(next) {
-		networkAddr = next
+	if !d.gatewayIP.IsValid() || !d.subnet.Contains(d.gatewayIP) {
+		return fmt.Errorf("gateway %s must be a valid IPv4 address within %s", d.gatewayIP.String(), d.subnet.String())
 	}
 
-	start := networkAddr
-	// Skip the gateway if it matches the candidate start
-	if d.gatewayIP.IsValid() && start == d.gatewayIP {
-		if next := start.Next(); next.IsValid() && d.subnet.Contains(next) {
-			start = next
-		}
+	if !d.ipPoolStart.IsValid() || !d.ipPoolEnd.IsValid() {
+		return fmt.Errorf("ip_pool_start and ip_pool_end must be configured within %s", d.subnet.String())
 	}
 
-	end := start
-	// Try to carve out up to 64 hosts inside the subnet
-	for i := 0; i < 63; i++ {
-		next := end.Next()
-		if !next.IsValid() || !d.subnet.Contains(next) {
-			break
-		}
-		end = next
+	if !d.subnet.Contains(d.ipPoolStart) || !d.subnet.Contains(d.ipPoolEnd) {
+		return fmt.Errorf("IP pool %s-%s must fall within subnet %s", d.ipPoolStart.String(), d.ipPoolEnd.String(), d.subnet.String())
 	}
 
-	if start.IsValid() && end.IsValid() && end.Compare(start) >= 0 {
-		d.ipPoolStart = start
-		d.ipPoolEnd = end
-		d.logger.Info("derived IP pool from bridge", "start", d.ipPoolStart.String(), "end", d.ipPoolEnd.String())
+	if d.ipPoolEnd.Compare(d.ipPoolStart) < 0 {
+		return fmt.Errorf("ip_pool_end %s precedes ip_pool_start %s", d.ipPoolEnd.String(), d.ipPoolStart.String())
 	}
+
+	if d.gatewayIP == d.ipPoolStart {
+		return fmt.Errorf("gateway %s conflicts with ip_pool_start", d.gatewayIP.String())
+	}
+
+	return nil
 }
 
 // monitorCtx handles context cancellation cleanup
@@ -417,6 +357,10 @@ func (d *Driver) Start(dataDir string) error {
 		return fmt.Errorf("failed to create cloud-init controller: %w", err)
 	}
 	d.ci = ci
+
+	if err := d.validateNetworkConfig(); err != nil {
+		return fmt.Errorf("invalid network configuration: %w", err)
+	}
 
 	// Ensure data directory exists
 	if err := os.MkdirAll(d.dataDir, 0755); err != nil {
