@@ -125,7 +125,7 @@ config {
   }
   network_interface {
     bridge {
-      name  = "virbr0"
+      name  = "br0"
       ports = ["ssh"]
     }
   }
@@ -140,7 +140,7 @@ config {
 				NetworkInterfacesConfig: []*net.NetworkInterfaceConfig{
 					{
 						Bridge: &net.NetworkInterfaceBridgeConfig{
-							Name:  "virbr0",
+							Name:  "br0",
 							Ports: []string{"ssh"},
 						},
 					},

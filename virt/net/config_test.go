@@ -33,7 +33,7 @@ func TestNetworkInterfaces_Validate(t *testing.T) {
 			inputNetworkInterfaces: &NetworkInterfacesConfig{
 				{
 					Bridge: &NetworkInterfaceBridgeConfig{
-						Name:  "virbr0",
+						Name:  "br0",
 						Ports: []string{"ssh"},
 					},
 				},
@@ -45,7 +45,7 @@ func TestNetworkInterfaces_Validate(t *testing.T) {
 			inputNetworkInterfaces: &NetworkInterfacesConfig{
 				{
 					Bridge: &NetworkInterfaceBridgeConfig{
-						Name:  "virbr0",
+						Name:  "br0",
 						Ports: []string{"ssh"},
 					},
 				},
@@ -110,7 +110,7 @@ func Test_InterfaceHCLSpecification(t *testing.T) {
 config {
   network_interface {
     bridge {
-      name  = "virbr0"
+      name  = "br0"
       ports = ["ssh"]
     }
   }
@@ -120,7 +120,7 @@ config {
 				NetworkInterfacesConfig: []*NetworkInterfaceConfig{
 					{
 						Bridge: &NetworkInterfaceBridgeConfig{
-							Name:  "virbr0",
+							Name:  "br0",
 							Ports: []string{"ssh"},
 						},
 					},
@@ -132,7 +132,7 @@ config {
 config {
   network_interface {
     bridge {
-      name = "virbr0"
+      name = "br0"
     }
   }
 }
@@ -141,7 +141,7 @@ config {
 				NetworkInterfacesConfig: []*NetworkInterfaceConfig{
 					{
 						Bridge: &NetworkInterfaceBridgeConfig{
-							Name:  "virbr0",
+							Name:  "br0",
 							Ports: nil,
 						},
 					},

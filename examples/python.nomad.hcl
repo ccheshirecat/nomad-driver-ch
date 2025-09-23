@@ -32,7 +32,7 @@ job "python-server" {
 
         network_interface {
           bridge {
-            name  = "virbr0"
+            name  = "br0"
             ports = ["http"]
           }
         }
