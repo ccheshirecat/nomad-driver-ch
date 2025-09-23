@@ -5,7 +5,6 @@ package virt
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -120,7 +119,7 @@ type Net interface {
 
 type Virtualizer interface {
 	Start(string) error
-	CreateDomain(config *domain.Config) error
+	CreateDomain(config *domain.Config, env map[string]string) error
 	StopDomain(name string) error
 	DestroyDomain(name string) error
 	GetInfo() (domain.VirtualizerInfo, error)
@@ -511,21 +510,6 @@ func createAllocFileMounts(task *drivers.TaskConfig) []domain.MountFileConfig {
 
 // To create the alloc env vars, they are all writtent into a scripy in
 // /etc/profile.d/virt.sh where the OS will take care of executing it at start.
-func createEnvsFile(envs map[string]string) domain.File {
-	con := []string{}
-
-	for k, v := range envs {
-		con = append(con, fmt.Sprintf("export %s=%s", k, v))
-	}
-
-	return domain.File{
-		Encoding:    "b64",
-		Path:        envVariblesFilePath,
-		Permissions: envVariblesFilePermissions,
-		Content:     base64.StdEncoding.EncodeToString([]byte(strings.Join(con, "\n\t"))),
-	}
-}
-
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
@@ -605,6 +589,10 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 	// Create alloc file system mounts for virtio-fs
 	// The CH backend will handle launching virtiofsd and generating cloud-init mount commands
 	allocFSMounts := createAllocFileMounts(cfg)
+
+	if cfg.Env == nil {
+		cfg.Env = make(map[string]string)
+	}
 
 	var osVariant *domain.OSVariant
 	if driverConfig.OS != nil {
@@ -695,7 +683,6 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		CIUserData:        driverConfig.UserData,
 		Password:          driverConfig.DefaultUserPassword,
 		SSHKey:            driverConfig.DefaultUserSSHKey,
-		Files:             []domain.File{createEnvsFile(cfg.Env)},
 		NetworkInterfaces: driverConfig.NetworkInterfacesConfig,
 		// Cloud Hypervisor specific fields from task config
 		Kernel:    driverConfig.Kernel,
@@ -710,7 +697,7 @@ func (d *VirtDriverPlugin) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHand
 		return nil, nil, fmt.Errorf("virt: invalid configuration %s: %w", cfg.AllocID, err)
 	}
 
-	if err := d.virtualizer.CreateDomain(dc); err != nil {
+	if err := d.virtualizer.CreateDomain(dc, cfg.Env); err != nil {
 		return nil, nil, fmt.Errorf("virt: failed to start task %s: %w", cfg.AllocID, err)
 	}
 

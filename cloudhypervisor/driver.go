@@ -6,6 +6,7 @@ package cloudhypervisor
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,6 +37,9 @@ const (
 	// Default timeouts and intervals
 	defaultShutdownTimeout = 30 * time.Second
 	defaultStartupTimeout  = 60 * time.Second
+
+	envFilePath  = "/etc/profile.d/virt.sh"
+	envFilePerms = "777"
 )
 
 // VMProcess represents a running VM process with its metadata
@@ -85,6 +90,131 @@ type Driver struct {
 // CloudInit interface for generating cloud-init ISOs
 type CloudInit interface {
 	Apply(ci *cloudinit.Config, path string) error
+}
+
+func prefixBitsToNetmask(bits int) string {
+	if bits < 0 || bits > 32 {
+		return ""
+	}
+	var mask uint32
+	if bits == 0 {
+		mask = 0
+	} else {
+		mask = ^uint32(0) << (32 - bits)
+	}
+	return fmt.Sprintf("%d.%d.%d.%d",
+		byte(mask>>24),
+		byte(mask>>16),
+		byte(mask>>8),
+		byte(mask))
+}
+
+type networkSettings struct {
+	address       string
+	gateway       string
+	cidrBits      int
+	nameservers   []string
+	interfaceName string
+}
+
+func (n networkSettings) cidrString() string {
+	return strconv.Itoa(n.cidrBits)
+}
+
+func (n networkSettings) netmaskDotted() string {
+	mask := prefixBitsToNetmask(n.cidrBits)
+	if mask == "" {
+		return "255.255.255.0"
+	}
+	return mask
+}
+
+func (d *Driver) deriveNetworkSettings(config *domain.Config, proc *VMProcess) (networkSettings, bool) {
+	settings := networkSettings{
+		interfaceName: "eth0",
+		cidrBits:      -1,
+		nameservers:   []string{"8.8.8.8", "8.8.4.4"},
+	}
+
+	if proc != nil && proc.IP != "" {
+		settings.address = proc.IP
+	}
+
+	if d.subnet.IsValid() {
+		settings.cidrBits = d.subnet.Bits()
+	}
+
+	if d.gatewayIP.IsValid() {
+		settings.gateway = d.gatewayIP.String()
+	} else if d.networkConfig != nil && d.networkConfig.Gateway != "" {
+		settings.gateway = d.networkConfig.Gateway
+	}
+
+	if config != nil && len(config.NetworkInterfaces) > 0 {
+		if bridge := config.NetworkInterfaces[0].Bridge; bridge != nil {
+			if bridge.StaticIP != "" {
+				settings.address = bridge.StaticIP
+			}
+			if bridge.Gateway != "" {
+				settings.gateway = bridge.Gateway
+			}
+			if bridge.Netmask != "" {
+				if bits, err := strconv.Atoi(bridge.Netmask); err == nil && bits >= 0 && bits <= 32 {
+					settings.cidrBits = bits
+				} else {
+					d.logger.Warn("invalid bridge netmask, falling back to defaults", "value", bridge.Netmask, "vm", config.Name)
+				}
+			}
+			if len(bridge.DNS) > 0 {
+				settings.nameservers = append([]string{}, bridge.DNS...)
+			}
+		}
+	}
+
+	if settings.cidrBits < 0 {
+		settings.cidrBits = 24
+	}
+
+	if settings.address == "" {
+		return settings, false
+	}
+
+	return settings, true
+}
+
+func envFileFromMap(env map[string]string) (domain.File, bool) {
+	if len(env) == 0 {
+		return domain.File{}, false
+	}
+
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	lines := make([]string, 0, len(keys))
+	for _, k := range keys {
+		lines = append(lines, fmt.Sprintf("export %s=%s", k, env[k]))
+	}
+
+	encoded := base64.StdEncoding.EncodeToString([]byte(strings.Join(lines, "\n")))
+	return domain.File{
+		Path:        envFilePath,
+		Permissions: envFilePerms,
+		Encoding:    "b64",
+		Content:     encoded,
+	}, true
+}
+
+func upsertFile(files []domain.File, file domain.File) []domain.File {
+	for i := range files {
+		if files[i].Path == file.Path {
+			files[i] = file
+			return files
+		}
+	}
+	return append(files, file)
 }
 
 // VMConfig represents the JSON structure for CH vm.create API
@@ -459,7 +589,7 @@ func (d *Driver) validateBinaries() error {
 }
 
 // CreateDomain creates and starts a new VM
-func (d *Driver) CreateDomain(config *domain.Config) error {
+func (d *Driver) CreateDomain(config *domain.Config, env map[string]string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -512,6 +642,29 @@ func (d *Driver) CreateDomain(config *domain.Config) error {
 		d.logger.Debug("allocated IP from pool", "ip", ip, "vm", config.Name)
 	}
 	proc.IP = ip
+
+	if env == nil {
+		env = make(map[string]string)
+	}
+
+	if settings, ok := d.deriveNetworkSettings(config, proc); ok {
+		env["VM_IP"] = settings.address
+		env["VM_CIDR"] = settings.cidrString()
+		if settings.gateway != "" {
+			env["VM_GATEWAY"] = settings.gateway
+		} else {
+			delete(env, "VM_GATEWAY")
+		}
+		if len(settings.nameservers) > 0 {
+			env["VM_DNS"] = strings.Join(settings.nameservers, " ")
+		} else {
+			delete(env, "VM_DNS")
+		}
+	}
+
+	if file, ok := envFileFromMap(env); ok {
+		config.Files = upsertFile(config.Files, file)
+	}
 
 	// Generate MAC address deterministically
 	proc.MAC = d.generateMAC(config.Name)

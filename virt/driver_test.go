@@ -122,7 +122,7 @@ func (mv *mockVirtualizar) Start(dataDir string) error {
 	return nil
 }
 
-func (mv *mockVirtualizar) CreateDomain(config *domain.Config) error {
+func (mv *mockVirtualizar) CreateDomain(config *domain.Config, env map[string]string) error {
 	mv.lock.Lock()
 	defer mv.lock.Unlock()
 

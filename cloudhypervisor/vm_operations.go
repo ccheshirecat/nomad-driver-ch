@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ccheshirecat/nomad-driver-ch/cloudinit"
@@ -62,71 +63,22 @@ func (d *Driver) createCloudInit(config *domain.Config, proc *VMProcess, workDir
 
 	// Configure network settings dynamically based on VM and task configuration
 	var networkConfig *cloudinit.NetworkConfig
-	if proc.IP != "" || len(config.NetworkInterfaces) > 0 {
-		// Start with defaults derived from the driver's parsed network config
-		netmask := "24"
-		if d.subnet.IsValid() {
-			netmask = fmt.Sprintf("%d", d.subnet.Bits())
-		}
-
-		gateway := d.networkConfig.Gateway
-		if d.gatewayIP.IsValid() {
-			gateway = d.gatewayIP.String()
-		}
-
-		ipAddress := proc.IP
-		interfaceName := "eth0"                       // Default interface
-		nameservers := []string{"8.8.8.8", "8.8.4.4"} // Default DNS servers
-
-		// Respect explicitly configured gateway if we don't have a parsed value
-		if gateway == "" && d.networkConfig.Gateway != "" {
-			gateway = d.networkConfig.Gateway
-		}
-
-		// Override with task-specific network configuration if provided
-		if len(config.NetworkInterfaces) > 0 && config.NetworkInterfaces[0].Bridge != nil {
-			bridgeConfig := config.NetworkInterfaces[0].Bridge
-
-			// Use static IP from task config if specified
-			if bridgeConfig.StaticIP != "" {
-				ipAddress = bridgeConfig.StaticIP
-			}
-
-			// Use task-specific gateway if specified
-			if bridgeConfig.Gateway != "" {
-				gateway = bridgeConfig.Gateway
-			}
-
-			// Use task-specific netmask if specified
-			if bridgeConfig.Netmask != "" {
-				netmask = bridgeConfig.Netmask
-			}
-
-			// Use task-specific DNS if specified
-			if len(bridgeConfig.DNS) > 0 {
-				nameservers = bridgeConfig.DNS
-			}
-
-			// For bridge network, keep eth0 as the interface name inside the VM
-			interfaceName = "eth0"
-		}
-
-		// Create network config for cloud-init (supports both static and DHCP)
+	if settings, ok := d.deriveNetworkSettings(config, proc); ok {
 		networkConfig = &cloudinit.NetworkConfig{
-			Address:     ipAddress, // Empty string enables DHCP
-			Gateway:     gateway,
-			Netmask:     netmask,
-			Interface:   interfaceName,
-			Nameservers: nameservers,
+			Address:     settings.address,
+			Gateway:     settings.gateway,
+			Netmask:     settings.cidrString(),
+			Interface:   settings.interfaceName,
+			Nameservers: settings.nameservers,
 		}
 
 		d.logger.Debug("configured cloud-init network",
-			"ip", ipAddress,
-			"gateway", gateway,
-			"netmask", netmask,
-			"interface", interfaceName,
-			"dns", nameservers,
-			"dhcp_fallback", ipAddress == "",
+			"ip", settings.address,
+			"gateway", settings.gateway,
+			"netmask", settings.cidrString(),
+			"interface", settings.interfaceName,
+			"dns", settings.nameservers,
+			"dhcp_fallback", settings.address == "",
 			"source", "task_config+driver_config")
 	}
 
@@ -336,6 +288,31 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 		cmdline = "console=hvc0 root=/dev/vda1 rw"
 	}
 
+	hostname := config.HostName
+	if hostname == "" {
+		hostname = config.Name
+	}
+
+	settings, haveSettings := d.deriveNetworkSettings(config, proc)
+
+	if haveSettings && !strings.Contains(cmdline, " ip=") && !strings.HasPrefix(strings.TrimSpace(cmdline), "ip=") {
+		gateway := settings.gateway
+		if gateway == "" {
+			gateway = "0.0.0.0"
+		}
+		iface := settings.interfaceName
+		if iface == "" {
+			iface = "eth0"
+		}
+		ipToken := fmt.Sprintf("ip=%s::%s:%s:%s:%s:none", settings.address, gateway, settings.netmaskDotted(), hostname, iface)
+		trimmed := strings.TrimSpace(cmdline)
+		if trimmed == "" {
+			cmdline = ipToken
+		} else {
+			cmdline = trimmed + " " + ipToken
+		}
+	}
+
 	// Cloud Hypervisor has no bootloader - kernel and initramfs are ALWAYS required
 	if kernel == "" || initramfs == "" {
 		return nil, fmt.Errorf("kernel and initramfs are required - Cloud Hypervisor has no bootloader. kernel='%s', initramfs='%s'", kernel, initramfs)
@@ -370,7 +347,12 @@ func (d *Driver) buildVMConfig(config *domain.Config, proc *VMProcess) (*VMConfi
 	}
 
 	// Add static IP configuration if available (cloud-init will handle final network setup)
-	if proc.IP != "" {
+	if haveSettings {
+		netConfig.IP = settings.address
+		if mask := settings.netmaskDotted(); mask != "" {
+			netConfig.Mask = mask
+		}
+	} else if proc.IP != "" {
 		netConfig.IP = proc.IP
 		if mask := maskStringFromPrefix(d.subnet); mask != "" {
 			netConfig.Mask = mask
