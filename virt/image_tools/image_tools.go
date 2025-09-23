@@ -28,7 +28,7 @@ func NewHandler(logger hclog.Logger) *QemuTools {
 }
 
 type ImageInfo struct {
-	Format   string
+	Format      string
 	VirtualSize int64
 }
 
@@ -47,7 +47,7 @@ func (q *QemuTools) GetImageInfo(basePath string) (*ImageInfo, error) {
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 
-	cmd := exec.Command("qemu-img", "info", "--output=json", basePath)
+	cmd := exec.Command("qemu-img", "info", "-U", "--output=json", basePath)
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
 
@@ -62,8 +62,8 @@ func (q *QemuTools) GetImageInfo(basePath string) (*ImageInfo, error) {
 
 	// Parse the qemu-img info output to get format and size
 	var output = struct {
-		Format   string `json:"format"`
-		VirtualSize int64 `json:"virtual-size"`
+		Format      string `json:"format"`
+		VirtualSize int64  `json:"virtual-size"`
 	}{}
 
 	err = json.Unmarshal(stdoutBuf.Bytes(), &output)
