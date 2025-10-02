@@ -1,0 +1,47 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
+job "python-server" {
+
+  group "virt-group" {
+    count = 1
+
+    network {
+      mode = "host"
+      port "http" {
+        to = 8000
+      }
+    }
+
+    task "virt-task" {
+
+      driver = "ch"
+
+      artifact {
+        source      = "http://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img"
+        destination = "local/focal-server-cloudimg-amd64.img"
+        mode        = "file"
+      }
+
+      config {
+        image                 = "local/focal-server-cloudimg-amd64.img"
+        primary_disk_size     = 10000
+        use_thin_copy         = true
+        default_user_password = "password"
+        cmds                  = ["python3 -m http.server 8000"]
+
+        network_interface {
+          bridge {
+            name  = "br0"
+            ports = ["http"]
+          }
+        }
+      }
+
+      resources {
+        cores  = 2
+        memory = 4000
+      }
+    }
+  }
+}

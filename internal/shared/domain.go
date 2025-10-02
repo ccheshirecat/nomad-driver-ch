@@ -1,0 +1,264 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
+package domain
+
+import (
+	"errors"
+	"fmt"
+	"net/netip"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/ccheshirecat/nomad-driver-ch/virt/net"
+	"github.com/hashicorp/go-multierror"
+)
+
+const (
+	minMemoryMB   = 500
+	maxNameLength = 63 // According to RFC 1123 (https://www.rfc-editor.org/rfc/rfc1123.html) should be at most 63 characters
+)
+
+var (
+	// matches valid DNS labels according to RFC 1123 (https://www.rfc-editor.org/rfc/rfc1123.html),
+	// should be at most 63 characters according to the RFC
+	validLabel = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$`)
+
+	ErrEmptyName           = errors.New("domain name can not be empty")
+	ErrMissingImage        = errors.New("image path can not be empty")
+	ErrNoCPUS              = errors.New("no cpus configured, specify 'cpu' in the job spec or 'cpuset_cpus' in the client configuration to assign cores")
+	ErrNotEnoughMemory     = errors.New("not enough memory assigned to task")
+	ErrIncompleteOSVariant = errors.New("provided os information is incomplete: arch and machine are mandatory ")
+	ErrInvalidHostName     = fmt.Errorf("a resource name must consist of lower case alphanumeric characters or '-', must start and end with an alphanumeric character and be less than %d characters", maxNameLength+1)
+	ErrPathNotAllowed      = fmt.Errorf("base_image is not in the allowed paths")
+)
+
+type File struct {
+	Path        string
+	Content     string
+	Permissions string
+	Encoding    string
+	Owner       string
+	Group       string
+}
+
+type MountFileConfig struct {
+	Source      string
+	Destination string
+	ReadOnly    bool
+	Tag         string
+}
+
+type OSVariant struct {
+	Arch    string
+	Machine string
+	Variant string
+}
+
+type Config struct {
+	RemoveConfigFiles bool
+	XMLConfig         string
+	Name              string
+	Memory            uint
+	CPUset            string
+	CPUs              uint
+	OsVariant         *OSVariant
+	BaseImage         string
+	DiskFmt           string
+	HostName          string
+	Timezone          *time.Location
+	Mounts            []MountFileConfig
+	Files             []File
+	SSHKey            string
+	Password          string
+	CMDs              []string
+	BOOTCMDs          []string
+	CIUserData        string
+
+	// Cloud Hypervisor specific fields
+	Kernel    string
+	Initramfs string
+	Cmdline   string
+
+	// VFIO device passthrough
+	VFIODevices []string
+
+	NetworkInterfaces net.NetworkInterfacesConfig
+}
+
+func (dc *Config) Validate(allowedPaths []string) error {
+	var mErr *multierror.Error
+	if dc.Name == "" {
+		mErr = multierror.Append(mErr, ErrEmptyName)
+	}
+
+	if dc.BaseImage == "" {
+		mErr = multierror.Append(mErr, ErrMissingImage)
+	} else {
+		if !isAllowedImagePath(allowedPaths, dc.BaseImage) {
+			mErr = multierror.Append(mErr, ErrPathNotAllowed)
+		}
+	}
+
+	if dc.Memory < minMemoryMB {
+		mErr = multierror.Append(mErr, ErrNotEnoughMemory)
+	}
+
+	if dc.OsVariant != nil {
+		if dc.OsVariant.Arch == "" &&
+			dc.OsVariant.Machine == "" {
+			mErr = multierror.Append(mErr, ErrIncompleteOSVariant)
+		}
+	}
+
+	if dc.CPUs < 1 {
+		mErr = multierror.Append(mErr, ErrNoCPUS)
+	}
+
+	if dc.HostName != "" && !IsValidLabel(dc.HostName) {
+		mErr = multierror.Append(mErr, ErrInvalidHostName)
+	}
+
+	if err := dc.NetworkInterfaces.Validate(); err != nil {
+		mErr = multierror.Append(mErr, err)
+	}
+
+	return mErr.ErrorOrNil()
+}
+
+func (dc *Config) Copy() *Config {
+	copy := &Config{
+		RemoveConfigFiles: dc.RemoveConfigFiles,
+		XMLConfig:         dc.XMLConfig,
+		Name:              dc.Name,
+		Memory:            dc.Memory,
+		CPUset:            dc.CPUset,
+		CPUs:              dc.CPUs,
+		BaseImage:         dc.BaseImage,
+		DiskFmt:           dc.DiskFmt,
+		NetworkInterfaces: slices.Clone(dc.NetworkInterfaces),
+		HostName:          dc.HostName,
+		Mounts:            slices.Clone(dc.Mounts),
+		Files:             slices.Clone(dc.Files),
+		SSHKey:            dc.SSHKey,
+		Password:          dc.Password,
+		CMDs:              slices.Clone(dc.CMDs),
+		BOOTCMDs:          slices.Clone(dc.BOOTCMDs),
+		CIUserData:        dc.CIUserData,
+	}
+
+	if dc.OsVariant != nil {
+		copy.OsVariant = &OSVariant{
+			Arch:    dc.OsVariant.Arch,
+			Machine: dc.OsVariant.Machine,
+			Variant: dc.OsVariant.Variant,
+		}
+	}
+
+	if dc.Timezone != nil {
+		*copy.Timezone = *dc.Timezone
+	}
+
+	return copy
+}
+
+type NetworkInterface struct {
+	NetworkName string
+	DeviceName  string
+	MAC         string
+	Addrs       []netip.Addr
+	Model       string
+	Driver      string
+}
+
+type VirtualizerInfo struct {
+	Model           string
+	Memory          uint64
+	FreeMemory      uint64
+	Cpus            uint
+	Cores           uint32
+	EmulatorVersion uint32
+	LibvirtVersion  uint32
+	RunningDomains  uint
+	InactiveDomains uint
+	StoragePools    uint
+}
+
+type Info struct {
+	State     string
+	Memory    uint64
+	CPUTime   uint64
+	MaxMemory uint64
+	NrVirtCPU uint
+}
+
+// IsValidLabel returns true if the string given is a valid DNS label (RFC 1123).
+// Note: the only difference between RFC 1035 and RFC 1123 labels is that in
+// RFC 1123 labels can begin with a number.
+func IsValidLabel(name string) bool {
+	return validLabel.MatchString(name)
+}
+
+// ValidateHostName returns an error a name is not a valid resource name.
+// The error will contain reference to what constitutes a valid resource name.
+func ValidateHostName(name string) error {
+	if !IsValidLabel(name) || strings.ToLower(name) != name || len(name) > maxNameLength {
+		return ErrInvalidHostName
+	}
+
+	return nil
+}
+
+func isParent(parent, path string) bool {
+	rel, err := filepath.Rel(parent, path)
+	return err == nil && !strings.HasPrefix(rel, "..")
+}
+
+func isAllowedImagePath(allowedPaths []string, imagePath string) bool {
+	for _, ap := range allowedPaths {
+		if isParent(ap, imagePath) {
+			return true
+		}
+	}
+
+	// Debug logging - this will help identify path validation issues
+	fmt.Printf("DEBUG: Image path '%s' not allowed. Allowed paths: %v\n", imagePath, allowedPaths)
+	for _, ap := range allowedPaths {
+		rel, err := filepath.Rel(ap, imagePath)
+		fmt.Printf("DEBUG: Checking if '%s' is parent of '%s' (rel: '%s', err: %v)\n", ap, imagePath, rel, err)
+	}
+
+	return false
+}
+
+// Network configuration for Cloud Hypervisor networking
+type Network struct {
+	Bridge      string `codec:"bridge"`
+	SubnetCIDR  string `codec:"subnet_cidr"`
+	Gateway     string `codec:"gateway"`
+	IPPoolStart string `codec:"ip_pool_start"`
+	IPPoolEnd   string `codec:"ip_pool_end"`
+	TAPPrefix   string `codec:"tap_prefix"`
+}
+
+// CloudHypervisor configuration for the Cloud Hypervisor VMM
+type CloudHypervisor struct {
+	Bin              string `codec:"bin"`
+	RemoteBin        string `codec:"remote_bin"`
+	VirtiofsdBin     string `codec:"virtiofsd_bin"`
+	DefaultKernel    string `codec:"default_kernel"`
+	DefaultInitramfs string `codec:"default_initramfs"`
+	Firmware         string `codec:"firmware"`
+	Seccomp          string `codec:"seccomp"`
+	LogFile          string `codec:"log_file"`
+}
+
+// VFIO configuration for device passthrough
+type VFIO struct {
+	Allowlist         []string `codec:"allowlist"`
+	IOMMUAddressWidth uint     `codec:"iommu_address_width"`
+	PCISegments       uint     `codec:"pci_segments"`
+}

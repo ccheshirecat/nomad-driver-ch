@@ -1,0 +1,76 @@
+#cloud-config
+{{- if .UserData}}
+merge_how:
+ - name: list
+   settings: [prepend]
+ - name: dict
+   settings: [no_replace, recurse_dict]
+{{- end}}
+
+{{- if .VendorData.Password }}
+password: {{.VendorData.Password}}
+{{- end }}
+
+{{- if .VendorData.SSHKey }}
+users:
+  - ssh-authorized-keys: {{.VendorData.SSHKey}}
+{{- end}}
+
+
+{{- $length_mounts := len .VendorData.Mounts }} {{- if ne $length_mounts 0 }}
+mounts:
+  {{- range .VendorData.Mounts}}
+  - [ {{.Tag}}, {{.Destination}}, "ext4", "defaults", "0", "2" ]
+  {{- end }}
+{{- end }}
+
+
+{{- $lenght_files := len .VendorData.Files }}{{- if ne $lenght_files 0}}
+write_files:
+  {{- range .VendorData.Files}}
+  - path: {{.Path}}
+    {{- if .Encoding}}
+    encoding: {{.Encoding}}
+    {{- end}}
+    content: {{.Content}}
+    permissions: '{{.Permissions}}'
+    owner: root:root
+  {{- end }}
+{{- end }}
+
+{{- $length_cmd := len .VendorData.RunCMD }} {{- if or (ne $length_cmd 0) }}
+runcmd:
+  {{- range .VendorData.RunCMD}}
+  - {{.}}
+  {{- end }}
+{{- end }}
+
+{{- $length_bcmd := len .VendorData.BootCMD }} {{- if or (ne $length_bcmd 0) }}
+bootcmd:
+  {{- range .VendorData.BootCMD}}
+  - {{.}}
+  {{- end }}
+{{- end }}
+
+{{- if .VendorData.Network }}
+network:
+  version: 2
+  ethernets:
+    {{- if .VendorData.Network.Interface }}{{ .VendorData.Network.Interface }}{{- else }}eth0{{- end }}:
+      {{- if .VendorData.Network.Address }}
+      addresses:
+        - {{ .VendorData.Network.Address }}{{- if .VendorData.Network.Netmask }}/{{ .VendorData.Network.Netmask }}{{- end }}
+      {{- if .VendorData.Network.Gateway }}
+      gateway4: {{ .VendorData.Network.Gateway }}
+      {{- end }}
+      {{- else }}
+      dhcp4: true
+      {{- end }}
+      {{- if .VendorData.Network.Nameservers }}
+      nameservers:
+        addresses:
+          {{- range .VendorData.Network.Nameservers }}
+          - {{ . }}
+          {{- end }}
+      {{- end }}
+{{- end }}
