@@ -2,7 +2,6 @@
 
 **Nomad task driver for the Cloud Hypervisor VMM**
 
-[![Build Status](https://badge.buildkite.com/your-build-badge)](https://buildkite.com/hypr/nomad-driver-ch)
 [![License](https://img.shields.io/badge/license-MPL%202.0-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ccheshirecat/nomad-driver-ch)](https://goreportcard.com/report/github.com/ccheshirecat/nomad-driver-ch)
 
